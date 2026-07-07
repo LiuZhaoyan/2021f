@@ -10,6 +10,7 @@
       <TargetName>2021f</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
+      <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
       <uAC6>0</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -393,6 +394,16 @@
         <Group>
           <GroupName>Application/User/Core</GroupName>
           <Files>
+            <File>
+              <FileName>medicine_car_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/medicine_car_app.c</FilePath>
+            </File>
+            <File>
+              <FileName>medicine_car_platform.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/medicine_car_platform.c</FilePath>
+            </File>
             <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>

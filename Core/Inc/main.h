@@ -53,10 +53,35 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+void SystemClock_Config(void);
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define GRAY_AD0_Pin GPIO_PIN_0
+#define GRAY_AD0_GPIO_Port GPIOC
+#define GRAY_AD1_Pin GPIO_PIN_1
+#define GRAY_AD1_GPIO_Port GPIOC
+#define GRAY_AD2_Pin GPIO_PIN_2
+#define GRAY_AD2_GPIO_Port GPIOC
+#define GRAY_OUT_Pin GPIO_PIN_3
+#define GRAY_OUT_GPIO_Port GPIOC
+#define CAR_PWM_LEFT_Pin GPIO_PIN_6
+#define CAR_PWM_LEFT_GPIO_Port GPIOA
+#define CAR_PWM_RIGHT_Pin GPIO_PIN_7
+#define CAR_PWM_RIGHT_GPIO_Port GPIOA
+#define CAR_LEFT_AIN1_Pin GPIO_PIN_0
+#define CAR_LEFT_AIN1_GPIO_Port GPIOB
+#define CAR_LEFT_AIN2_Pin GPIO_PIN_1
+#define CAR_LEFT_AIN2_GPIO_Port GPIOB
+#define CAR_RIGHT_BIN1_Pin GPIO_PIN_2
+#define CAR_RIGHT_BIN1_GPIO_Port GPIOB
+#define CAR_RIGHT_BIN2_Pin GPIO_PIN_10
+#define CAR_RIGHT_BIN2_GPIO_Port GPIOB
+#define CAR_LED_Pin GPIO_PIN_5
+#define CAR_LED_GPIO_Port GPIOB
+#define CAR_BEEP_Pin GPIO_PIN_6
+#define CAR_BEEP_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
