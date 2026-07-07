@@ -400,6 +400,11 @@
               <FilePath>../Core/Src/medicine_car_app.c</FilePath>
             </File>
             <File>
+              <FileName>medicine_car_tests.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/medicine_car_tests.c</FilePath>
+            </File>
+            <File>
               <FileName>medicine_car_platform.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/medicine_car_platform.c</FilePath>

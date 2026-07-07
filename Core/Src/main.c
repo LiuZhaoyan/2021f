@@ -25,6 +25,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "medicine_car_app.h"
+#include "medicine_car_config.h"
+#include "medicine_car_tests.h"
 
 /* USER CODE END Includes */
 
@@ -106,6 +108,9 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   MedicineCar_Init();
+#if MED_CAR_TEST_MODE != MED_CAR_TEST_MODE_NONE
+  MedicineCar_RunFirmwareTestLoop();
+#endif
 
   /* USER CODE END 2 */
 

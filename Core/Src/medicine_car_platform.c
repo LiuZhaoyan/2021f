@@ -207,6 +207,12 @@ void Load(int moto1, int moto2)
     uint32_t right_pwm;
 
     Limit(&moto1, &moto2);
+#if MED_CAR_LEFT_MOTOR_INVERT
+    moto1 = -moto1;
+#endif
+#if MED_CAR_RIGHT_MOTOR_INVERT
+    moto2 = -moto2;
+#endif
     Pwm_L = moto1;
     Pwm_R = moto2;
 
