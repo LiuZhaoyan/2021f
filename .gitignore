@@ -1,0 +1,52 @@
+# Keil uVision user/local state
+*.uvguix.*
+*.uvgui.*
+*.uvgui_*
+*.uvopt
+*.uvoptx
+*.uvmpw
+*.uvmpw.*
+
+# Keil build output directories
+MDK-ARM/2021f/
+MDK-ARM/Objects/
+MDK-ARM/Listings/
+Objects/
+Listings/
+
+# Keil / ARM compiler generated files
+*.axf
+*.bin
+*.crf
+*.d
+*.dep
+*.elf
+*.hex
+*.htm
+*.html
+*.lnp
+*.lst
+*.map
+*.o
+*.obj
+*.iex
+*.i
+*.pbi
+*.pbd
+*.tra
+
+# Debug and analysis output
+*.bak
+*.log
+*.orig
+*.tmp
+JLinkLog.txt
+JLinkSettings.ini
+
+# IDE/editor and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+Desktop.ini
