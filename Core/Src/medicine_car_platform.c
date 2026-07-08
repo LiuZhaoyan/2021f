@@ -181,7 +181,9 @@ void MedicineCar_SetRedLed(uint8_t on)
 
 void MedicineCar_SetYellowLed(uint8_t on)
 {
-    write_pin(CAR_BEEP_GPIO_Port, CAR_BEEP_Pin, on);
+    HAL_GPIO_WritePin(CAR_BEEP_GPIO_Port,
+                      CAR_BEEP_Pin,
+                      on ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
 void MedicineCar_SetGreenLed(uint8_t on)

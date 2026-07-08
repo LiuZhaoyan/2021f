@@ -54,7 +54,8 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, CAR_LEFT_AIN1_Pin|CAR_LEFT_AIN2_Pin|CAR_RIGHT_BIN1_Pin|CAR_RIGHT_BIN2_Pin
-                          |CAR_LED_Pin|CAR_BEEP_Pin, GPIO_PIN_RESET);
+                          |CAR_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CAR_BEEP_GPIO_Port, CAR_BEEP_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : GRAY_AD0_Pin GRAY_AD1_Pin GRAY_AD2_Pin */
   GPIO_InitStruct.Pin = GRAY_AD0_Pin|GRAY_AD1_Pin|GRAY_AD2_Pin;
