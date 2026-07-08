@@ -49,11 +49,15 @@ static void gray_select_channel(uint8_t channel)
 
 static void gray_settle_delay(void)
 {
+#if MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_GRAY
+    HAL_Delay(MED_CAR_TEST_GRAY_CHANNEL_HOLD_MS);
+#else
     volatile uint32_t cycles = MED_CAR_GRAY_SETTLE_CYCLES;
 
     while (cycles-- > 0U) {
         __NOP();
     }
+#endif
 }
 
 static void gray_update_all(void)
@@ -167,6 +171,20 @@ uint8_t MedicineCar_ReadLineSensor(uint8_t index)
         return gray_sensor_values[7];
     default:
         return MED_CAR_DEFAULT_MISSING_SENSOR;
+    }
+}
+
+void MedicineCar_ReadLineSensors(uint8_t values[8])
+{
+    uint8_t channel;
+
+    if (values == NULL) {
+        return;
+    }
+
+    gray_update_all();
+    for (channel = 0U; channel < 8U; channel++) {
+        values[channel] = gray_sensor_values[channel];
     }
 }
 

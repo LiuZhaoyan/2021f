@@ -62,17 +62,13 @@ static void debug_motor_test_loop(void)
 
 static void print_gray_snapshot(const char *prefix)
 {
-    uint8_t io1 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO1);
-    uint8_t io2 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2);
-    uint8_t io3 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3);
-    uint8_t io4 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO4);
-    uint8_t io5 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5);
-    uint8_t io6 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6);
-    uint8_t io7 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO7);
-    uint8_t io8 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO8);
+    uint8_t gray[8];
 
+    MedicineCar_ReadLineSensors(gray);
     u2_printf("%s: %u %u %u %u %u %u %u %u\r\n",
-              prefix, io1, io2, io3, io4, io5, io6, io7, io8);
+              prefix,
+              gray[0], gray[1], gray[2], gray[3],
+              gray[4], gray[5], gray[6], gray[7]);
 }
 
 static void debug_gray_test_loop(void)
