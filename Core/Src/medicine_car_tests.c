@@ -6,6 +6,11 @@
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
 
+static int abs_int(int value)
+{
+    return (value < 0) ? -value : value;
+}
+
 static void debug_motor_test_loop(void)
 {
     const int pwm = MED_CAR_TEST_MOTOR_PWM;
@@ -147,9 +152,7 @@ static void debug_encoder_test_loop(void)
     while (1) {
         uint32_t elapsed = 0U;
 
-        Encoder_Left = 0;
-        Encoder_Right = 0;
-        Read_Speed();
+        MedicineCar_ResetEncoders();
         u2_printf("Encoder reset: L=%d R=%d\r\n", Encoder_Left, Encoder_Right);
 
         Load(pwm, pwm);
@@ -171,6 +174,61 @@ static void debug_encoder_test_loop(void)
     }
 }
 
+static void debug_wheel_match_test_loop(void)
+{
+    const int left_pwm = MED_CAR_TEST_WHEEL_MATCH_LEFT_PWM;
+    const int right_pwm = MED_CAR_TEST_WHEEL_MATCH_RIGHT_PWM;
+
+    u2_printf("\r\nWheel match test start, pwm L=%d R=%d\r\n",
+              left_pwm,
+              right_pwm);
+    Load(0, 0);
+    delay_ms(1000U);
+
+    while (1) {
+        uint32_t elapsed = 0U;
+        int last_left;
+        int last_right;
+
+        MedicineCar_ResetEncoders();
+        last_left = Encoder_Left;
+        last_right = Encoder_Right;
+
+        Load(left_pwm, right_pwm);
+        while (elapsed < MED_CAR_TEST_WHEEL_MATCH_RUN_MS) {
+            int left_delta;
+            int right_delta;
+            int speed_diff;
+
+            delay_ms(MED_CAR_TEST_WHEEL_MATCH_SAMPLE_MS);
+            elapsed += MED_CAR_TEST_WHEEL_MATCH_SAMPLE_MS;
+            Read_Speed();
+
+            left_delta = Encoder_Left - last_left;
+            right_delta = Encoder_Right - last_right;
+            speed_diff = abs_int(left_delta) - abs_int(right_delta);
+
+            u2_printf("Wheel match %lu ms: PWM L=%d R=%d "
+                      "Tick L=%d R=%d Diff=%d Enc L=%d R=%d\r\n",
+                      (unsigned long)elapsed,
+                      left_pwm,
+                      right_pwm,
+                      left_delta,
+                      right_delta,
+                      speed_diff,
+                      Encoder_Left,
+                      Encoder_Right);
+
+            last_left = Encoder_Left;
+            last_right = Encoder_Right;
+        }
+
+        Load(0, 0);
+        u2_printf("Wheel match cycle done, diff>0 means left faster\r\n");
+        delay_ms(MED_CAR_TEST_WHEEL_MATCH_PAUSE_MS);
+    }
+}
+
 void MedicineCar_RunFirmwareTestLoop(void)
 {
 #if MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_MOTOR
@@ -187,6 +245,8 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_route_test_loop(2U);
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ENCODER
     debug_encoder_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_WHEEL_MATCH
+    debug_wheel_match_test_loop();
 #else
     return;
 #endif

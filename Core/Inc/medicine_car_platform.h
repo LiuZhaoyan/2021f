@@ -33,6 +33,7 @@ void MedicineCar_SetYellowLed(uint8_t on);
 void MedicineCar_SetGreenLed(uint8_t on);
 
 void delay_ms(uint32_t ms);
+void MedicineCar_ResetEncoders(void);
 void Read_Speed(void);
 int Read_Encoder(uint8_t timx);
 void Load(int moto1, int moto2);

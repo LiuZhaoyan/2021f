@@ -6,8 +6,9 @@
 /*
  * Hardware that has not been built yet stays disabled by default. Enable one
  * flag at a time after the matching pins/peripheral are configured in CubeMX.
+ * Encoders are enabled because TIM1/TIM8 and PA8/PA9/PC6/PC7 are configured.
  */
-#define MED_CAR_ENABLE_ENCODER          0U
+#define MED_CAR_ENABLE_ENCODER          1U
 #define MED_CAR_ENABLE_BLUETOOTH        0U
 #define MED_CAR_ENABLE_RECOGNITION_UART 0U
 #define MED_CAR_ENABLE_TFT              0U
@@ -22,6 +23,7 @@
 #define MED_CAR_TEST_MODE_ROUTE2        5U
 #define MED_CAR_TEST_MODE_ENCODER       6U
 #define MED_CAR_TEST_MODE_GRAY_TRACE    7U
+#define MED_CAR_TEST_MODE_WHEEL_MATCH   8U
 #define MED_CAR_TEST_MODE               MED_CAR_TEST_MODE_NONE
 
 #define MED_CAR_TEST_MOTOR_PWM          2000
@@ -35,9 +37,16 @@
 #define MED_CAR_TEST_ENCODER_PWM        2000
 #define MED_CAR_TEST_ENCODER_RUN_MS     2000U
 #define MED_CAR_TEST_ENCODER_SAMPLE_MS  200U
+#define MED_CAR_TEST_WHEEL_MATCH_LEFT_PWM  2000
+#define MED_CAR_TEST_WHEEL_MATCH_RIGHT_PWM 2000
+#define MED_CAR_TEST_WHEEL_MATCH_RUN_MS    3000U
+#define MED_CAR_TEST_WHEEL_MATCH_SAMPLE_MS 200U
+#define MED_CAR_TEST_WHEEL_MATCH_PAUSE_MS  1000U
 
 #define MED_CAR_LEFT_MOTOR_INVERT       0U
 #define MED_CAR_RIGHT_MOTOR_INVERT      0U
+#define MED_CAR_LEFT_ENCODER_INVERT     0U
+#define MED_CAR_RIGHT_ENCODER_INVERT    0U
 
 #define MED_CAR_DEFAULT_MISSING_SENSOR  0U
 #define MED_CAR_DEFAULT_DRUG_PRESENT    1U

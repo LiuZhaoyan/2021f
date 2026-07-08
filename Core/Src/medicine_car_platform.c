@@ -27,6 +27,8 @@ char num[50];
 
 static uint32_t service_tick_ms;
 static uint8_t gray_sensor_values[8];
+static uint16_t last_left_encoder_count;
+static uint16_t last_right_encoder_count;
 
 static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
 {
@@ -79,14 +81,18 @@ static uint32_t scale_code_pwm(int pwm)
     return (value * MED_CAR_H7_PWM_PERIOD) / (uint32_t)MED_CAR_CODE_PWM_MAX;
 }
 
-static void add_virtual_encoder_ticks(void)
+static int get_virtual_encoder_delta(int pwm)
 {
-#if MED_CAR_ENABLE_ENCODER
-    (void)0;
-#else
-    Encoder_Left += (Pwm_L < 0) ? -80 : ((Pwm_L > 0) ? 80 : 0);
-    Encoder_Right += (Pwm_R < 0) ? -80 : ((Pwm_R > 0) ? 80 : 0);
-#endif
+    return (pwm < 0) ? -80 : ((pwm > 0) ? 80 : 0);
+}
+
+static int get_encoder_delta(TIM_HandleTypeDef *htim, uint16_t *last_count)
+{
+    uint16_t now = (uint16_t)__HAL_TIM_GET_COUNTER(htim);
+    int delta = (int)((int16_t)(now - *last_count));
+
+    *last_count = now;
+    return delta;
 }
 
 static void uart_vprintf(UART_HandleTypeDef *huart, const char *fmt, va_list args)
@@ -106,6 +112,11 @@ static void uart_vprintf(UART_HandleTypeDef *huart, const char *fmt, va_list arg
 
 void MedicineCarPlatform_Init(void)
 {
+#if MED_CAR_ENABLE_ENCODER
+    (void)HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
+    (void)HAL_TIM_Encoder_Start(&htim8, TIM_CHANNEL_ALL);
+    MedicineCar_ResetEncoders();
+#endif
     (void)HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
     (void)HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
     Load(0, 0);
@@ -183,21 +194,64 @@ void delay_ms(uint32_t ms)
     HAL_Delay(ms);
 }
 
+void MedicineCar_ResetEncoders(void)
+{
+#if MED_CAR_ENABLE_ENCODER
+    __HAL_TIM_SET_COUNTER(&htim1, 0U);
+    __HAL_TIM_SET_COUNTER(&htim8, 0U);
+    last_left_encoder_count = 0U;
+    last_right_encoder_count = 0U;
+#endif
+    Encoder_Left = 0;
+    Encoder_Right = 0;
+    Speed_L = 0;
+    Speed_R = 0;
+}
+
 void Read_Speed(void)
 {
 #if MED_CAR_ENABLE_ENCODER
-    Encoder_Left = Read_Encoder(3U);
-    Encoder_Right = Read_Encoder(4U);
+    Speed_L = Read_Encoder(1U);
+    Speed_R = Read_Encoder(8U);
+    Encoder_Left += Speed_L;
+    Encoder_Right += Speed_R;
 #else
-    add_virtual_encoder_ticks();
+    Speed_L = get_virtual_encoder_delta(Pwm_L);
+    Speed_R = get_virtual_encoder_delta(Pwm_R);
+    Encoder_Left += Speed_L;
+    Encoder_Right += Speed_R;
 #endif
-    Speed_L = Encoder_Left;
-    Speed_R = Encoder_Right;
 }
 
 int Read_Encoder(uint8_t timx)
 {
-    (void)timx;
+#if MED_CAR_ENABLE_ENCODER
+    int delta;
+
+    if (timx == 1U) {
+        delta = get_encoder_delta(&htim1, &last_left_encoder_count);
+#if MED_CAR_LEFT_ENCODER_INVERT
+        delta = -delta;
+#endif
+        return delta;
+    }
+
+    if (timx == 8U) {
+        delta = get_encoder_delta(&htim8, &last_right_encoder_count);
+#if MED_CAR_RIGHT_ENCODER_INVERT
+        delta = -delta;
+#endif
+        return delta;
+    }
+#else
+    if (timx == 1U) {
+        return get_virtual_encoder_delta(Pwm_L);
+    }
+    if (timx == 8U) {
+        return get_virtual_encoder_delta(Pwm_R);
+    }
+#endif
+
     return 0;
 }
 
@@ -292,8 +346,7 @@ void xunxian(uint16_t roadsum, int pwm)
     uint32_t guard = 0U;
     int correction;
 
-    Encoder_Left = 0;
-    Encoder_Right = 0;
+    MedicineCar_ResetEncoders();
 
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
         uint8_t io2 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2);
@@ -328,8 +381,7 @@ void zhao_bai(uint16_t roadsum, int pwm)
 {
     uint32_t guard = 0U;
 
-    Encoder_Left = 0;
-    Encoder_Right = 0;
+    MedicineCar_ResetEncoders();
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
         xunxian(300U, pwm);
         if ((MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2) == 0U) &&
