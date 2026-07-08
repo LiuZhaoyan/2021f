@@ -81,6 +81,11 @@ static uint32_t scale_code_pwm(int pwm)
     return (value * MED_CAR_H7_PWM_PERIOD) / (uint32_t)MED_CAR_CODE_PWM_MAX;
 }
 
+static int trim_run_pwm(int pwm, int numerator)
+{
+    return (pwm * numerator) / MED_CAR_PWM_TRIM_DEN;
+}
+
 static int get_virtual_encoder_delta(int pwm)
 {
     return (pwm < 0) ? -80 : ((pwm > 0) ? 80 : 0);
@@ -370,7 +375,8 @@ void xunxian(uint16_t roadsum, int pwm)
             correction += MED_CAR_LINE_PWM_ADJUST_2;
         }
 
-        Load(pwm - correction, pwm + correction);
+        Load(trim_run_pwm(pwm - correction, MED_CAR_LEFT_PWM_TRIM_NUM),
+             trim_run_pwm(pwm + correction, MED_CAR_RIGHT_PWM_TRIM_NUM));
         HAL_Delay(10U);
         Read_Speed();
         guard++;
