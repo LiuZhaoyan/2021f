@@ -55,23 +55,45 @@ static void debug_motor_test_loop(void)
     }
 }
 
+static void print_gray_snapshot(const char *prefix)
+{
+    uint8_t io1 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO1);
+    uint8_t io2 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2);
+    uint8_t io3 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3);
+    uint8_t io4 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO4);
+    uint8_t io5 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5);
+    uint8_t io6 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6);
+    uint8_t io7 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO7);
+    uint8_t io8 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO8);
+
+    u2_printf("%s: %u %u %u %u %u %u %u %u\r\n",
+              prefix, io1, io2, io3, io4, io5, io6, io7, io8);
+}
+
 static void debug_gray_test_loop(void)
 {
     u2_printf("\r\nGray sensor test start\r\n");
+    while (1) {
+        print_gray_snapshot("GRAY");
+        delay_ms(MED_CAR_TEST_GRAY_PRINT_MS);
+    }
+}
+
+static void debug_gray_trace_test_loop(void)
+{
+    u2_printf("\r\nGray trace test start, distance=%u pwm=%d\r\n",
+              MED_CAR_TEST_GRAY_TRACE_DISTANCE,
+              MED_CAR_TEST_GRAY_TRACE_PWM);
+    Load(0, 0);
+    delay_ms(1000U);
 
     while (1) {
-        uint8_t io1 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO1);
-        uint8_t io2 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2);
-        uint8_t io3 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3);
-        uint8_t io4 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO4);
-        uint8_t io5 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5);
-        uint8_t io6 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6);
-        uint8_t io7 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO7);
-        uint8_t io8 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO8);
-
-        u2_printf("GRAY: %u %u %u %u %u %u %u %u\r\n",
-                  io1, io2, io3, io4, io5, io6, io7, io8);
-        delay_ms(MED_CAR_TEST_GRAY_PRINT_MS);
+        print_gray_snapshot("GRAY BEFORE TRACE");
+        xunxian(MED_CAR_TEST_GRAY_TRACE_DISTANCE, MED_CAR_TEST_GRAY_TRACE_PWM);
+        Load(0, 0);
+        print_gray_snapshot("GRAY AFTER TRACE");
+        u2_printf("Gray trace segment done\r\n");
+        delay_ms(MED_CAR_TEST_GRAY_TRACE_PAUSE_MS);
     }
 }
 
@@ -155,6 +177,8 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_motor_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_GRAY
     debug_gray_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_GRAY_TRACE
+    debug_gray_trace_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_LED_BEEP
     debug_led_beep_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE1
