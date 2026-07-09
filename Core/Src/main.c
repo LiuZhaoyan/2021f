@@ -109,6 +109,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
+  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC3, SYSCFG_SWITCH_PC3_CLOSE);
   MedicineCar_Init();
 #if MED_CAR_TEST_MODE != MED_CAR_TEST_MODE_NONE
   MedicineCar_RunFirmwareTestLoop();
