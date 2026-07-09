@@ -144,5 +144,5 @@ FPC 摄像头接口 `J6` 支持 OV2640/OV5640 类模块，主要连接如下：
 ## 当前工程特别注意
 
 - 当前项目已经启用 MPU、I-Cache、D-Cache。后续新增 SDMMC、QSPI、USB、DCMI、UART DMA 等外设时，需要同步处理 DMA 缓冲区所在内存区域和 Cache 清理/失效。
-- `PC2_C` / `PC3_C` 在 H743 上属于特殊 `_C` 引脚，当前工程用于灰度传感器 `GRAY_AD2/GRAY_OUT`；保持 CubeMX 生成的相关 SYSCFG/Analog Switch 配置，不要手写删改。
+- `PC2_C` / `PC3_C` 在 H743 上属于特殊 `_C` 引脚；当前工程中 `PC2_C` 作为灰度备用输入，`PC3_C` 用于感为八路灰度传感器串行 `GRAY_DAT`。保持 CubeMX 生成的相关 SYSCFG/Analog Switch 配置，不要手写删改。
 - 规划新增外设前，先检查本文件中的板载占脚，再检查 `2021f.ioc` 和 `当前主程序功能与引脚总表.md` 中的业务占脚，避免把核心板固定资源和小车外接模块叠在同一引脚上。

@@ -40,37 +40,43 @@ static void write_pin(GPIO_TypeDef *port, uint16_t pin, uint8_t on)
     HAL_GPIO_WritePin(port, pin, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
-static void gray_select_channel(uint8_t channel)
+static void gray_clock_high_delay(void)
 {
-    write_pin(GRAY_AD0_GPIO_Port, GRAY_AD0_Pin, (channel & 0x01U) ? 1U : 0U);
-    write_pin(GRAY_AD1_GPIO_Port, GRAY_AD1_Pin, (channel & 0x02U) ? 1U : 0U);
-    write_pin(GRAY_AD2_GPIO_Port, GRAY_AD2_Pin, (channel & 0x04U) ? 1U : 0U);
-}
-
-static void gray_settle_delay(void)
-{
-#if MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_GRAY
-    HAL_Delay(MED_CAR_TEST_GRAY_CHANNEL_HOLD_MS);
-#else
-    volatile uint32_t cycles = MED_CAR_GRAY_SETTLE_CYCLES;
+    volatile uint32_t cycles = MED_CAR_GRAY_SERIAL_CLK_HIGH_CYCLES;
 
     while (cycles-- > 0U) {
         __NOP();
     }
-#endif
+}
+
+static uint8_t gray_read_serial_status(void)
+{
+    uint8_t bit;
+    uint8_t status = 0U;
+
+    write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 0U);
+    HAL_Delay(MED_CAR_GRAY_SERIAL_FRAME_SYNC_MS);
+
+    for (bit = 0U; bit < 8U; bit++) {
+        write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 0U);
+        if (read_pin(GRAY_DAT_GPIO_Port, GRAY_DAT_Pin) == MED_CAR_GRAY_BLACK_LEVEL) {
+            status |= (uint8_t)(1U << bit);
+        }
+        write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 1U);
+        gray_clock_high_delay();
+    }
+
+    write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 0U);
+    return status;
 }
 
 static void gray_update_all(void)
 {
     uint8_t channel;
+    uint8_t status = gray_read_serial_status();
 
     for (channel = 0U; channel < 8U; channel++) {
-        gray_select_channel(channel);
-        gray_settle_delay();
-        gray_sensor_values[channel] =
-            (read_pin(GRAY_OUT_GPIO_Port, GRAY_OUT_Pin) == MED_CAR_GRAY_BLACK_LEVEL)
-                ? 1U
-                : 0U;
+        gray_sensor_values[channel] = (uint8_t)((status >> channel) & 0x01U);
     }
 }
 
@@ -374,10 +380,17 @@ void xunxian(uint16_t roadsum, int pwm)
     MedicineCar_ResetEncoders();
 
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
-        uint8_t io2 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2);
-        uint8_t io3 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3);
-        uint8_t io5 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5);
-        uint8_t io6 = MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6);
+        uint8_t gray[8];
+        uint8_t io2;
+        uint8_t io3;
+        uint8_t io5;
+        uint8_t io6;
+
+        MedicineCar_ReadLineSensors(gray);
+        io2 = gray[1];
+        io3 = gray[2];
+        io5 = gray[4];
+        io6 = gray[5];
 
         correction = 0;
         if (io3 != 0U) {

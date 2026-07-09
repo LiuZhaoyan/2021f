@@ -58,14 +58,14 @@ void SystemClock_Config(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define GRAY_AD0_Pin GPIO_PIN_0
-#define GRAY_AD0_GPIO_Port GPIOC
-#define GRAY_AD1_Pin GPIO_PIN_1
-#define GRAY_AD1_GPIO_Port GPIOC
-#define GRAY_AD2_Pin GPIO_PIN_2
-#define GRAY_AD2_GPIO_Port GPIOC
-#define GRAY_OUT_Pin GPIO_PIN_3
-#define GRAY_OUT_GPIO_Port GPIOC
+#define GRAY_CLK_Pin GPIO_PIN_0
+#define GRAY_CLK_GPIO_Port GPIOC
+#define GRAY_UNUSED1_Pin GPIO_PIN_1
+#define GRAY_UNUSED1_GPIO_Port GPIOC
+#define GRAY_UNUSED2_Pin GPIO_PIN_2
+#define GRAY_UNUSED2_GPIO_Port GPIOC
+#define GRAY_DAT_Pin GPIO_PIN_3
+#define GRAY_DAT_GPIO_Port GPIOC
 #define CAR_PWM_LEFT_Pin GPIO_PIN_6
 #define CAR_PWM_LEFT_GPIO_Port GPIOA
 #define CAR_PWM_RIGHT_Pin GPIO_PIN_7
