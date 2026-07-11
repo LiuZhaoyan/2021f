@@ -28,6 +28,7 @@ void MedicineCarPlatform_Service(void);
 
 uint8_t MedicineCar_ReadLineSensor(uint8_t index);
 void MedicineCar_ReadLineSensors(uint8_t values[8]);
+uint8_t MedicineCar_ReadDrugSensorRaw(void);
 uint8_t MedicineCar_ReadDrugPresent(void);
 void MedicineCar_SetRedLed(uint8_t on);
 void MedicineCar_SetYellowLed(uint8_t on);

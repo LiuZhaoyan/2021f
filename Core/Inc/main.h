@@ -60,8 +60,8 @@ void SystemClock_Config(void);
 /* Private defines -----------------------------------------------------------*/
 #define GRAY_CLK_Pin GPIO_PIN_0
 #define GRAY_CLK_GPIO_Port GPIOC
-#define GRAY_UNUSED1_Pin GPIO_PIN_1
-#define GRAY_UNUSED1_GPIO_Port GPIOC
+#define DRUG_SENSOR_Pin GPIO_PIN_1
+#define DRUG_SENSOR_GPIO_Port GPIOC
 #define GRAY_UNUSED2_Pin GPIO_PIN_2
 #define GRAY_UNUSED2_GPIO_Port GPIOC
 #define GRAY_DAT_Pin GPIO_PIN_3

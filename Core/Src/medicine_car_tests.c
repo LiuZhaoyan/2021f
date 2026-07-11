@@ -5,6 +5,7 @@
 #include "medicine_car_app.h"
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
+#include "medicine_car_vision.h"
 
 static int abs_int(int value)
 {
@@ -233,6 +234,49 @@ static void debug_wheel_match_test_loop(void)
     }
 }
 
+static void debug_vision_uart_test_loop(void)
+{
+    u2_printf("\r\nVision UART test start, USART3 115200 8N1\r\n");
+    u2_printf("Protocol: STM32 sends REQ, expects OK,count,digits or ERR,NONE\r\n");
+
+    while (1) {
+        MedicineCarVisionResult result;
+
+        if (MedicineCarVision_Request(&result,
+                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
+            uint8_t index;
+
+            u2_printf("VISION OK count=%u digits=", result.count);
+            for (index = 0U; index < result.count; index++) {
+                u2_printf("%u", result.digits[index]);
+                if (index != (uint8_t)(result.count - 1U)) {
+                    u2_printf(",");
+                }
+            }
+            u2_printf("\r\n");
+        } else {
+            u2_printf("VISION ERR timeout or invalid response\r\n");
+        }
+
+        delay_ms(MED_CAR_TEST_VISION_PRINT_MS);
+    }
+}
+
+static void debug_drug_sensor_test_loop(void)
+{
+    u2_printf("\r\nDrug sensor test start, PC1 input pull-up, low means present\r\n");
+
+    while (1) {
+        uint8_t raw = MedicineCar_ReadDrugSensorRaw();
+        uint8_t present = MedicineCar_ReadDrugPresent();
+
+        u2_printf("DRUG raw=%s interpreted=%s\r\n",
+                  (raw != 0U) ? "HIGH" : "LOW",
+                  (present != 0U) ? "PRESENT" : "ABSENT");
+        delay_ms(MED_CAR_TEST_DRUG_PRINT_MS);
+    }
+}
+
 void MedicineCar_RunFirmwareTestLoop(void)
 {
 #if MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_MOTOR
@@ -251,6 +295,10 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_encoder_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_WHEEL_MATCH
     debug_wheel_match_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_VISION_UART
+    debug_vision_uart_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_DRUG_SENSOR
+    debug_drug_sensor_test_loop();
 #else
     return;
 #endif

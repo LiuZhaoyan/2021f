@@ -202,7 +202,16 @@ void MedicineCar_ReadLineSensors(uint8_t values[8])
 uint8_t MedicineCar_ReadDrugPresent(void)
 {
 #if MED_CAR_ENABLE_DRUG_SENSOR
-    return 0U;
+    return (MedicineCar_ReadDrugSensorRaw() == MED_CAR_DRUG_PRESENT_LEVEL) ? 1U : 0U;
+#else
+    return MED_CAR_DEFAULT_DRUG_PRESENT;
+#endif
+}
+
+uint8_t MedicineCar_ReadDrugSensorRaw(void)
+{
+#if MED_CAR_ENABLE_DRUG_SENSOR
+    return read_pin(DRUG_SENSOR_GPIO_Port, DRUG_SENSOR_Pin);
 #else
     return MED_CAR_DEFAULT_DRUG_PRESENT;
 #endif

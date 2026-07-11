@@ -48,6 +48,7 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, GPIO_PIN_RESET);
@@ -63,17 +64,17 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GRAY_CLK_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GRAY_UNUSED1_Pin GRAY_UNUSED2_Pin */
-  GPIO_InitStruct.Pin = GRAY_UNUSED1_Pin|GRAY_UNUSED2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : GRAY_DAT_Pin */
-  GPIO_InitStruct.Pin = GRAY_DAT_Pin;
+  /*Configure GPIO pins : DRUG_SENSOR_Pin GRAY_DAT_Pin */
+  GPIO_InitStruct.Pin = DRUG_SENSOR_Pin|GRAY_DAT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GRAY_DAT_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : GRAY_UNUSED2_Pin */
+  GPIO_InitStruct.Pin = GRAY_UNUSED2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GRAY_UNUSED2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : CAR_LEFT_AIN1_Pin CAR_LEFT_AIN2_Pin CAR_RIGHT_BIN1_Pin CAR_RIGHT_BIN2_Pin
                            CAR_LED_Pin CAR_BEEP_Pin */

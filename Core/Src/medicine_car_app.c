@@ -2,6 +2,7 @@
 
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
+#include "medicine_car_vision.h"
 
 static uint8_t route_running;
 
@@ -49,25 +50,60 @@ static void deliver_right(uint16_t return_cross_distance, uint16_t home_distance
     finish_at_home(home_distance, 5000);
 }
 
+static void clear_recognition_buffers(void)
+{
+    NumBuff[0] = 0;
+    NumBuff[1] = 0;
+    XBuff[0] = 0;
+    XBuff[1] = 0;
+}
+
+static uint8_t request_recognition_pair(uint8_t reverse_positions)
+{
+    uint8_t attempt;
+
+    clear_recognition_buffers();
+    for (attempt = 0U; attempt < MED_CAR_VISION_RETRY_COUNT; attempt++) {
+        MedicineCarVisionResult result;
+
+        if (MedicineCarVision_Request(&result,
+                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
+            uint8_t index;
+            uint8_t usable_count = result.count;
+
+            if (usable_count > 2U) {
+                usable_count = 2U;
+            }
+
+            for (index = 0U; index < usable_count; index++) {
+                NumBuff[index] = (int)result.digits[index];
+                if (reverse_positions != 0U) {
+                    XBuff[index] = (index == 0U) ? 2 : 1;
+                } else {
+                    XBuff[index] = (int)(index + 1U);
+                }
+            }
+            return (usable_count > 0U) ? 1U : 0U;
+        }
+    }
+
+    clear_recognition_buffers();
+    return 0U;
+}
+
 static void shibie(void)
 {
-    NumBuff[0] = getnum();
-    NumBuff[1] = getnum();
-    XBuff[0] = 1;
-    XBuff[1] = 2;
+    (void)request_recognition_pair(0U);
 }
 
 static void shibie_1(void)
 {
-    NumBuff[0] = getnum();
-    NumBuff[1] = getnum();
-    XBuff[0] = 2;
-    XBuff[1] = 1;
+    (void)request_recognition_pair(1U);
 }
 
-static void shibie_34(void)
+static uint8_t shibie_34(void)
 {
-    shibie_1();
+    return request_recognition_pair(1U);
 }
 
 static void find_1(void)
@@ -137,11 +173,22 @@ static void run3_8(void)
 
 static void fahui(void)
 {
+    uint8_t recognize_attempts = 0U;
+
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, 5000);
 
     do {
-        shibie_34();
-    } while (NumBuff[0] == NumBuff[1]);
+        recognize_attempts++;
+        if (shibie_34() == 0U) {
+            break;
+        }
+    } while ((NumBuff[0] == NumBuff[1]) &&
+             (recognize_attempts < MED_CAR_VISION_RETRY_COUNT));
+
+    if ((NumBuff[0] == 0) && (NumBuff[1] == 0)) {
+        Load(0, 0);
+        return;
+    }
 
     if (deliver_if_matched(MED_CAR_DISTANCE_MID,
                            MED_CAR_DISTANCE_SECOND_CHECK,
