@@ -26,7 +26,12 @@ int XBuff[2] = {0, 0};
 char num[50];
 
 static uint32_t service_tick_ms;
-static uint8_t gray_sensor_values[8];
+static uint8_t gray_sensor_values[8] = {
+    MED_CAR_GRAY_WHITE_LEVEL, MED_CAR_GRAY_WHITE_LEVEL,
+    MED_CAR_GRAY_WHITE_LEVEL, MED_CAR_GRAY_WHITE_LEVEL,
+    MED_CAR_GRAY_WHITE_LEVEL, MED_CAR_GRAY_WHITE_LEVEL,
+    MED_CAR_GRAY_WHITE_LEVEL, MED_CAR_GRAY_WHITE_LEVEL
+};
 static uint16_t last_left_encoder_count;
 static uint16_t last_right_encoder_count;
 
@@ -59,7 +64,7 @@ static uint8_t gray_read_serial_status(void)
 
     for (bit = 0U; bit < 8U; bit++) {
         write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 0U);
-        if (read_pin(GRAY_DAT_GPIO_Port, GRAY_DAT_Pin) == MED_CAR_GRAY_BLACK_LEVEL) {
+        if (read_pin(GRAY_DAT_GPIO_Port, GRAY_DAT_Pin) == MED_CAR_GRAY_WHITE_LEVEL) {
             status |= (uint8_t)(1U << bit);
         }
         write_pin(GRAY_CLK_GPIO_Port, GRAY_CLK_Pin, 1U);
@@ -374,46 +379,90 @@ void diaotou(void)
 
 void xunxian(uint16_t roadsum, int pwm)
 {
+    static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
     uint32_t guard = 0U;
+    int last_direction = 0;
     int correction;
 
     MedicineCar_ResetEncoders();
+
+    {
+        uint8_t warmup_gray[8];
+        int warmup_channel;
+        int warmup_sum = 0;
+
+        MedicineCar_ReadLineSensors(warmup_gray);
+        for (warmup_channel = 0; warmup_channel < 8; warmup_channel++) {
+            if (warmup_gray[warmup_channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                warmup_sum += line_weights[warmup_channel];
+            }
+        }
+        if (warmup_sum > 0) {
+            last_direction = 1;
+        } else if (warmup_sum < 0) {
+            last_direction = -1;
+        }
+    }
 
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
         uint8_t gray[8];
         uint8_t io1;
         uint8_t io2;
         uint8_t io3;
+        uint8_t io4;
         uint8_t io5;
         uint8_t io6;
         uint8_t io7;
+        uint8_t io8;
+        uint8_t line_seen;
+        uint8_t channel;
+        uint8_t black_count;
+        int weighted_sum;
 
         MedicineCar_ReadLineSensors(gray);
         io1 = gray[0];
         io2 = gray[1];
         io3 = gray[2];
+        io4 = gray[3];
         io5 = gray[4];
         io6 = gray[5];
         io7 = gray[6];
+        io8 = gray[7];
+        line_seen = ((io1 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io2 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io3 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io4 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io5 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io6 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io7 == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (io8 == MED_CAR_GRAY_BLACK_LEVEL)) ? 1U : 0U;
 
         correction = 0;
-        if (io1 != 0U) {
-            correction -= MED_CAR_LINE_PWM_ADJUST_3;
-        } else if (io7 != 0U) {
+        if (line_seen != 0U) {
+            black_count = 0U;
+            weighted_sum = 0;
+            for (channel = 0U; channel < 8U; channel++) {
+                if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                    weighted_sum += line_weights[channel];
+                    black_count++;
+                }
+            }
+
+            if (black_count > 0U) {
+                correction = (weighted_sum * MED_CAR_LINE_PWM_ADJUST_1) /
+                             (int)black_count;
+                if (correction > 0) {
+                    last_direction = 1;
+                } else if (correction < 0) {
+                    last_direction = -1;
+                } else {
+                    last_direction = 0;
+                }
+            }
+        } else if (last_direction > 0) {
             correction += MED_CAR_LINE_PWM_ADJUST_3;
-        } else {
-            if (io3 != 0U) {
-                correction -= MED_CAR_LINE_PWM_ADJUST_1;
-            }
-            if (io2 != 0U) {
-                correction -= MED_CAR_LINE_PWM_ADJUST_2;
-            }
-            if (io5 != 0U) {
-                correction += MED_CAR_LINE_PWM_ADJUST_1;
-            }
-            if (io6 != 0U) {
-                correction += MED_CAR_LINE_PWM_ADJUST_2;
-            }
+        } else if (last_direction < 0) {
+            correction -= MED_CAR_LINE_PWM_ADJUST_3;
         }
 
         Load(trim_run_pwm(pwm - correction, MED_CAR_LEFT_PWM_TRIM_NUM),
@@ -433,10 +482,10 @@ void zhao_bai(uint16_t roadsum, int pwm)
     MedicineCar_ResetEncoders();
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
         xunxian(300U, pwm);
-        if ((MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2) == 0U) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3) == 0U) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5) == 0U) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6) == 0U)) {
+        if ((MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2) == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3) == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5) == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6) == MED_CAR_GRAY_BLACK_LEVEL)) {
             break;
         }
         guard++;

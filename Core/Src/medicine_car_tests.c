@@ -90,9 +90,17 @@ static void debug_gray_trace_test_loop(void)
 
     while (1) {
         print_gray_snapshot("GRAY BEFORE TRACE");
+        Read_Speed();
+        u2_printf("TRACE BEFORE\r\n");
+        u2_printf("Speed L=%d R=%d\r\n", Speed_L, Speed_R);
+        u2_printf("Enc L=%d R=%d\r\n", Encoder_Left, Encoder_Right);
         xunxian(MED_CAR_TEST_GRAY_TRACE_DISTANCE, MED_CAR_TEST_GRAY_TRACE_PWM);
         Load(0, 0);
         print_gray_snapshot("GRAY AFTER TRACE");
+        Read_Speed();
+        u2_printf("TRACE AFTER\r\n");
+        u2_printf("Speed L=%d R=%d\r\n", Speed_L, Speed_R);
+        u2_printf("Enc L=%d R=%d\r\n", Encoder_Left, Encoder_Right);
         u2_printf("Gray trace segment done\r\n");
         delay_ms(MED_CAR_TEST_GRAY_TRACE_PAUSE_MS);
     }
