@@ -381,29 +381,39 @@ void xunxian(uint16_t roadsum, int pwm)
 
     while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
         uint8_t gray[8];
+        uint8_t io1;
         uint8_t io2;
         uint8_t io3;
         uint8_t io5;
         uint8_t io6;
+        uint8_t io7;
 
         MedicineCar_ReadLineSensors(gray);
+        io1 = gray[0];
         io2 = gray[1];
         io3 = gray[2];
         io5 = gray[4];
         io6 = gray[5];
+        io7 = gray[6];
 
         correction = 0;
-        if (io3 != 0U) {
-            correction -= MED_CAR_LINE_PWM_ADJUST_1;
-        }
-        if (io2 != 0U) {
-            correction -= MED_CAR_LINE_PWM_ADJUST_2;
-        }
-        if (io5 != 0U) {
-            correction += MED_CAR_LINE_PWM_ADJUST_1;
-        }
-        if (io6 != 0U) {
-            correction += MED_CAR_LINE_PWM_ADJUST_2;
+        if (io1 != 0U) {
+            correction -= MED_CAR_LINE_PWM_ADJUST_3;
+        } else if (io7 != 0U) {
+            correction += MED_CAR_LINE_PWM_ADJUST_3;
+        } else {
+            if (io3 != 0U) {
+                correction -= MED_CAR_LINE_PWM_ADJUST_1;
+            }
+            if (io2 != 0U) {
+                correction -= MED_CAR_LINE_PWM_ADJUST_2;
+            }
+            if (io5 != 0U) {
+                correction += MED_CAR_LINE_PWM_ADJUST_1;
+            }
+            if (io6 != 0U) {
+                correction += MED_CAR_LINE_PWM_ADJUST_2;
+            }
         }
 
         Load(trim_run_pwm(pwm - correction, MED_CAR_LEFT_PWM_TRIM_NUM),
