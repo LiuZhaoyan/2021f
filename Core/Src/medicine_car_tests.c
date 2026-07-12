@@ -182,7 +182,8 @@ static void debug_route_test_loop(void)
 
     u2_printf("[Phase 3] xunxian to intersection, distance=%u\r\n",
               MED_CAR_DISTANCE_FIRST_CHECK);
-    xunxian(MED_CAR_DISTANCE_FIRST_CHECK, 4000);
+    delay_ms(1000U);
+    xunxian(MED_CAR_DISTANCE_FIRST_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
 
     if (target == 1U) {
         u2_printf("[Phase 3] push LEFT, turn into left branch\r\n");
@@ -196,7 +197,7 @@ static void debug_route_test_loop(void)
 
     u2_printf("[Phase 4] xunxian to door, max=%u\r\n",
               MED_CAR_DISTANCE_MID);
-    xunxian_until_door(MED_CAR_DISTANCE_MID, 4000);
+    xunxian_until_door(MED_CAR_DISTANCE_MID, MED_CAR_TEST_GRAY_TRACE_PWM);
 
     u2_printf("[Phase 5] waiting for drug removal...\r\n");
     {
