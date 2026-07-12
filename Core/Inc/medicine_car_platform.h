@@ -54,6 +54,7 @@ uint8_t sensor_turn_left(void);
 uint8_t sensor_turn_right(void);
 uint8_t sensor_diaotou(void);
 uint8_t xunxian_until_door(uint16_t max_distance, int pwm);
+uint8_t xunxian_until_fork(uint16_t max_distance, int pwm);
 void move_forward_timed(uint32_t duration_ms, int pwm);
 
 void u2_printf(const char *fmt, ...);

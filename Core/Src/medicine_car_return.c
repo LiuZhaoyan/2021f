@@ -25,15 +25,6 @@ static uint8_t fork_turn_right(void)
                                 is_line_right);
 }
 
-static uint8_t reverse_turn(uint8_t forward_dir)
-{
-    if (forward_dir == RETURN_DIR_LEFT) {
-        return sensor_turn_right();
-    } else {
-        return sensor_turn_left();
-    }
-}
-
 static uint8_t fork_reverse_turn(uint8_t forward_dir)
 {
     if (forward_dir == RETURN_DIR_LEFT) {
@@ -80,37 +71,18 @@ void Return_Execute(uint16_t home_distance, int pwm)
     sensor_diaotou();
 
     while (!Return_IsEmpty()) {
-        uint8_t cross_found;
+        uint8_t dir = return_pop();
 
-        cross_found = xunxian(home_distance, pwm);
-
-        if (cross_found != 0U) {
-            uint8_t dir = return_pop();
-
-            // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-            //                    MED_CAR_CROSS_ADVANCE_PWM);
-            reverse_turn(dir);
-        } else if (is_fork()) {
-            uint8_t dir = return_pop();
-
-            // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-            //                    MED_CAR_CROSS_ADVANCE_PWM);
+        xunxian_until_fork(home_distance, pwm);
+        if (dir != RETURN_DIR_STRAIGHT) {
             fork_reverse_turn(dir);
-        } else {
-            stop(1);
-            return;
         }
     }
 
     for (retry = 0U; retry < (uint8_t)MED_CAR_RETURN_CROSS_RETRY_MAX; retry++) {
-        uint8_t cross_found;
-
-        cross_found = xunxian(home_distance, pwm);
-        if (cross_found == 0U) {
+        if (xunxian_until_fork(home_distance, pwm) == 0U) {
             return;
         }
-        // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-        //                    MED_CAR_CROSS_ADVANCE_PWM);
     }
 
     stop(1);

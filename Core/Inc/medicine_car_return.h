@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-#define RETURN_DIR_LEFT   0U
-#define RETURN_DIR_RIGHT  1U
+#define RETURN_DIR_LEFT     0U
+#define RETURN_DIR_RIGHT    1U
+#define RETURN_DIR_STRAIGHT 2U
 
 void Return_Init(void);
 void Return_Push(uint8_t direction);
