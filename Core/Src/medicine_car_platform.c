@@ -634,8 +634,8 @@ uint8_t search_line_rotating(int left_pwm, int right_pwm,
 
 uint8_t sensor_turn_left(void)
 {
-    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-                       MED_CAR_CROSS_ADVANCE_PWM);
+    // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
+    //                    MED_CAR_CROSS_ADVANCE_PWM);
     return search_line_rotating_with_min_ticks(MED_CAR_TURN_LEFT_LEFT_PWM,
                                                MED_CAR_TURN_LEFT_RIGHT_PWM,
                                                MED_CAR_SENSOR_TURN_LEFT_MIN_TICKS,
@@ -646,8 +646,8 @@ uint8_t sensor_turn_left(void)
 
 uint8_t sensor_turn_right(void)
 {
-    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-                       MED_CAR_CROSS_ADVANCE_PWM);
+    // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
+    //                    MED_CAR_CROSS_ADVANCE_PWM);
     return search_line_rotating_with_min_ticks(MED_CAR_TURN_RIGHT_LEFT_PWM,
                                                MED_CAR_TURN_RIGHT_RIGHT_PWM,
                                                MED_CAR_SENSOR_TURN_RIGHT_MIN_TICKS,

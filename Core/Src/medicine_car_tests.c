@@ -489,55 +489,119 @@ static void debug_cross_turn_test_loop(void)
     uint32_t cycle;
 
     u2_printf("\r\nCross turn test start\r\n");
-    u2_printf("Line follow to cross, stop, then turn left/right.\r\n");
-    u2_printf("PWM=%d, cycles=%u, max approach ticks=%u\r\n",
+    u2_printf("Right turn -> door -> drug removal -> diaotou -> cross -> left turn -> door\r\n");
+    u2_printf("PWM=%d, approach=%u, door=%u, return=%u, left_door=%u\r\n",
               MED_CAR_TEST_CROSS_TURN_PWM,
-              MED_CAR_TEST_CROSS_TURN_CYCLES,
-              MED_CAR_TEST_CROSS_TURN_MAX_TICKS);
+              MED_CAR_TEST_CROSS_TURN_MAX_TICKS,
+              MED_CAR_TEST_CROSS_TURN_DOOR_DISTANCE,
+              MED_CAR_TEST_CROSS_TURN_RETURN_DISTANCE,
+              MED_CAR_TEST_CROSS_TURN_LEFT_DOOR_DISTANCE);
 
     while (1) {
         for (cycle = 1U; cycle <= MED_CAR_TEST_CROSS_TURN_CYCLES; cycle++) {
-            debug_cross_turn_once(cycle, "LEFT", sensor_turn_left);
-            delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+            uint8_t cross_found;
+            uint8_t turn_result;
+            uint8_t door_found;
+            uint8_t diaotou_result;
 
-            debug_cross_turn_once(cycle, "RIGHT", sensor_turn_right);
+            Load(0, 0);
+            u2_printf("Cycle %lu: put car on line before cross, start in 3s.\r\n",
+                      (unsigned long)cycle);
+            delay_ms(3000U);
+
+            cross_found = xunxian(MED_CAR_TEST_CROSS_TURN_MAX_TICKS,
+                                  MED_CAR_TEST_CROSS_TURN_PWM);
+            Read_Speed();
+            Load(0, 0);
+
+            u2_printf("Cycle %lu approach %s: L=%d R=%d sum=%d\r\n",
+                      (unsigned long)cycle,
+                      (cross_found != 0U) ? "CROSS" : "LIMIT",
+                      Encoder_Left, Encoder_Right,
+                      Encoder_Left + Encoder_Right);
+
+            if (cross_found == 0U) {
+                u2_printf("Cycle %lu skip: cross not found.\r\n",
+                          (unsigned long)cycle);
+                delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+                continue;
+            }
+
+            u2_printf("Cycle %lu turn RIGHT...\r\n", (unsigned long)cycle);
+            turn_result = sensor_turn_right();
+            u2_printf("Cycle %lu turn RIGHT result: %s\r\n",
+                      (unsigned long)cycle,
+                      (turn_result != 0U) ? "OK" : "TIMEOUT");
+
+            u2_printf("Cycle %lu follow line to door, max=%u pwm=%d...\r\n",
+                      (unsigned long)cycle,
+                      MED_CAR_TEST_CROSS_TURN_DOOR_DISTANCE,
+                      MED_CAR_TEST_CROSS_TURN_DOOR_PWM);
+            door_found = xunxian_until_door(MED_CAR_TEST_CROSS_TURN_DOOR_DISTANCE,
+                                            MED_CAR_TEST_CROSS_TURN_DOOR_PWM);
+            u2_printf("Cycle %lu door: %s\r\n",
+                      (unsigned long)cycle,
+                      (door_found != 0U) ? "DETECTED" : "MAX_DISTANCE");
+
+            stop(1);
+            u2_printf("Cycle %lu waiting for drug removal...\r\n",
+                      (unsigned long)cycle);
+            while (MedicineCar_ReadDrugPresent() != 0U) {
+                delay_ms(100U);
+            }
+            u2_printf("Cycle %lu drug removed.\r\n",
+                      (unsigned long)cycle);
+
+            u2_printf("Cycle %lu diaotou...\r\n", (unsigned long)cycle);
+            diaotou_result = sensor_diaotou();
+            u2_printf("Cycle %lu diaotou result: %s\r\n",
+                      (unsigned long)cycle,
+                      (diaotou_result != 0U) ? "OK" : "TIMEOUT");
+
+            u2_printf("Cycle %lu return to cross, distance=%u...\r\n",
+                      (unsigned long)cycle,
+                      MED_CAR_TEST_CROSS_TURN_RETURN_DISTANCE);
+            {
+                uint8_t cross_on_return;
+                uint8_t left_turn_result;
+                uint8_t left_door_found;
+
+                cross_on_return = xunxian(MED_CAR_TEST_CROSS_TURN_RETURN_DISTANCE,
+                                          MED_CAR_TEST_CROSS_TURN_PWM);
+                u2_printf("Cycle %lu return cross: %s\r\n",
+                          (unsigned long)cycle,
+                          (cross_on_return != 0U) ? "FOUND" : "LIMIT");
+
+                if (cross_on_return == 0U) {
+                    u2_printf("Cycle %lu skip left turn: cross not found.\r\n",
+                              (unsigned long)cycle);
+                    delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+                    continue;
+                }
+
+                u2_printf("Cycle %lu turn LEFT...\r\n", (unsigned long)cycle);
+                left_turn_result = sensor_turn_left();
+                u2_printf("Cycle %lu turn LEFT result: %s\r\n",
+                          (unsigned long)cycle,
+                          (left_turn_result != 0U) ? "OK" : "TIMEOUT");
+
+                u2_printf("Cycle %lu follow to left door, max=%u...\r\n",
+                          (unsigned long)cycle,
+                          MED_CAR_TEST_CROSS_TURN_LEFT_DOOR_DISTANCE);
+                left_door_found = xunxian_until_door(
+                    MED_CAR_TEST_CROSS_TURN_LEFT_DOOR_DISTANCE,
+                    MED_CAR_TEST_CROSS_TURN_DOOR_PWM);
+                u2_printf("Cycle %lu left door: %s\r\n",
+                          (unsigned long)cycle,
+                          (left_door_found != 0U) ? "DETECTED" : "MAX_DISTANCE");
+                stop(1);
+            }
+
             delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
         }
 
-        u2_printf("Cross turn round complete. Next round starts after pause.\r\n");
+        u2_printf("Cross turn round complete. Next round after pause.\r\n");
         delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
-    }
-}
-
-static void debug_sensor_turns_test_loop(void)
-{
-    u2_printf("\r\nSensor turns test start\r\n");
-    u2_printf("Place car at a cross intersection, then press any key...\r\n");
-    Load(0, 0);
-    delay_ms(3000U);
-
-    while (1) {
-        uint8_t result;
-
-        u2_printf("--- Sensor turn LEFT ---\r\n");
-        result = sensor_turn_left();
-        u2_printf("Turn LEFT result: %s\r\n",
-                  (result != 0U) ? "OK" : "TIMEOUT");
-        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
-
-        u2_printf("--- Sensor turn RIGHT ---\r\n");
-        result = sensor_turn_right();
-        u2_printf("Turn RIGHT result: %s\r\n",
-                  (result != 0U) ? "OK" : "TIMEOUT");
-        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
-
-        u2_printf("--- Sensor DIAOTOU ---\r\n");
-        result = sensor_diaotou();
-        u2_printf("Diaotou result: %s\r\n",
-                  (result != 0U) ? "OK" : "TIMEOUT");
-        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
-
-        u2_printf("Sensor turns cycle done\r\n");
     }
 }
 
@@ -587,8 +651,6 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_vision_uart_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_DRUG_SENSOR
     debug_drug_sensor_test_loop();
-#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_SENSOR_TURNS
-    debug_sensor_turns_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_SENSOR_DOOR
     debug_sensor_door_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_CROSS_TURN
