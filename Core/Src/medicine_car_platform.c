@@ -606,7 +606,6 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
     int last_direction = 0;
     uint8_t confirm_count = 0U;
     uint8_t miss_count = 0U;
-    uint8_t door_region = 0U;
     uint8_t prev_black_count = 0U;
     int correction;
 
@@ -648,14 +647,13 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
         }
 
         if (black_count >= MED_CAR_DOOR_BLACK_MIN) {
-            door_region = 1U;
             miss_count = 0U;
             confirm_count++;
             if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
                 stop(1);
                 return 1U;
             }
-        } else if (door_region != 0U) {
+        } else {
             uint8_t mid_black = 0U;
             uint8_t ch;
 
@@ -681,7 +679,6 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
                 } else {
                     miss_count++;
                     if (miss_count >= MED_CAR_DOOR_MISS_MAX) {
-                        door_region = 0U;
                         confirm_count = 0U;
                         miss_count = 0U;
                     }
@@ -689,7 +686,6 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
             } else {
                 miss_count++;
                 if (miss_count >= MED_CAR_DOOR_MISS_MAX) {
-                    door_region = 0U;
                     confirm_count = 0U;
                     miss_count = 0U;
                 }
