@@ -131,6 +131,7 @@
 #define MED_CAR_DOOR_BLACK_MIN          4U
 #define MED_CAR_DOOR_CONFIRM_CNT        2U
 #define MED_CAR_DOOR_GUARD_MAX          800U
+#define MED_CAR_DOOR_MISS_MAX           5U
 
 #define MED_CAR_CROSS_ADVANCE_MS         50U
 #define MED_CAR_CROSS_ADVANCE_PWM       MED_CAR_TEST_GRAY_TRACE_PWM

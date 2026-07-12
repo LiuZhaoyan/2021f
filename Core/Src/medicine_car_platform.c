@@ -605,6 +605,8 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
     uint32_t guard = 0U;
     int last_direction = 0;
     uint8_t confirm_count = 0U;
+    uint8_t miss_count = 0U;
+    uint8_t door_region = 0U;
     int correction;
 
     MedicineCar_ResetEncoders();
@@ -637,14 +639,50 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
 
         MedicineCar_ReadLineSensors(gray);
 
-        if (is_wide_black(MED_CAR_DOOR_BLACK_MIN) != 0U) {
+        black_count = 0U;
+        for (channel = 0U; channel < 8U; channel++) {
+            if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                black_count++;
+            }
+        }
+
+        if (black_count >= MED_CAR_DOOR_BLACK_MIN) {
+            door_region = 1U;
+            miss_count = 0U;
             confirm_count++;
             if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
                 stop(1);
                 return 1U;
             }
-        } else {
-            confirm_count = 0U;
+        } else if (door_region != 0U) {
+            uint8_t mid_black = 0U;
+            uint8_t ch;
+
+            for (ch = 2U; ch <= 5U; ch++) {
+                if (gray[ch] == MED_CAR_GRAY_BLACK_LEVEL) {
+                    mid_black++;
+                }
+            }
+
+            if (mid_black >= 2U &&
+                gray[0] == MED_CAR_GRAY_WHITE_LEVEL &&
+                gray[1] == MED_CAR_GRAY_WHITE_LEVEL &&
+                gray[6] == MED_CAR_GRAY_WHITE_LEVEL &&
+                gray[7] == MED_CAR_GRAY_WHITE_LEVEL) {
+                miss_count = 0U;
+                confirm_count++;
+                if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
+                    stop(1);
+                    return 1U;
+                }
+            } else {
+                miss_count++;
+                if (miss_count >= MED_CAR_DOOR_MISS_MAX) {
+                    door_region = 0U;
+                    confirm_count = 0U;
+                    miss_count = 0U;
+                }
+            }
         }
 
         line_seen = ((gray[0] == MED_CAR_GRAY_BLACK_LEVEL) ||

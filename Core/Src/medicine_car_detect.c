@@ -17,13 +17,11 @@ uint8_t is_at_cross(void)
     return 0U;
 }
 
-uint8_t is_wide_black(uint8_t threshold)
+uint8_t is_wide_black(const uint8_t gray[8], uint8_t threshold)
 {
-    uint8_t gray[8];
     uint8_t channel;
     uint8_t count = 0U;
 
-    MedicineCar_ReadLineSensors(gray);
     for (channel = 0U; channel < 8U; channel++) {
         if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
             count++;
