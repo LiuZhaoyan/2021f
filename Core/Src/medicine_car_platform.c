@@ -35,6 +35,8 @@ static uint8_t gray_sensor_values[8] = {
 static uint16_t last_left_encoder_count;
 static uint16_t last_right_encoder_count;
 
+static void move_forward_straight(uint16_t distance_ticks, int pwm);
+
 static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
 {
     return (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET) ? 1U : 0U;
@@ -386,7 +388,7 @@ void diaotou(void)
     stop(1);
 }
 
-void xunxian(uint16_t roadsum, int pwm)
+uint8_t xunxian(uint16_t roadsum, int pwm)
 {
     static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
     uint32_t guard = 0U;
@@ -429,6 +431,15 @@ void xunxian(uint16_t roadsum, int pwm)
         int weighted_sum;
 
         MedicineCar_ReadLineSensors(gray);
+
+        if ((gray[1] == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
+            stop(1);
+            return 1U;
+        }
+
         io1 = gray[0];
         io2 = gray[1];
         io3 = gray[2];
@@ -482,23 +493,253 @@ void xunxian(uint16_t roadsum, int pwm)
     }
 
     stop(1);
+    return 0U;
 }
 
 void zhao_bai(uint16_t roadsum, int pwm)
 {
+    xunxian(roadsum, pwm);
+}
+
+uint8_t is_at_cross(void)
+{
+    uint8_t gray[8];
+
+    MedicineCar_ReadLineSensors(gray);
+    if ((gray[1] == MED_CAR_GRAY_BLACK_LEVEL) &&
+        (gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
+        (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
+        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+uint8_t is_wide_black(uint8_t threshold)
+{
+    uint8_t gray[8];
+    uint8_t channel;
+    uint8_t count = 0U;
+
+    MedicineCar_ReadLineSensors(gray);
+    for (channel = 0U; channel < 8U; channel++) {
+        if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+            count++;
+        }
+    }
+    return (count >= threshold) ? 1U : 0U;
+}
+
+uint8_t is_line_left(void)
+{
+    uint8_t gray[8];
+
+    MedicineCar_ReadLineSensors(gray);
+    if ((gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
+        (gray[3] == MED_CAR_GRAY_BLACK_LEVEL)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+uint8_t is_line_right(void)
+{
+    uint8_t gray[8];
+
+    MedicineCar_ReadLineSensors(gray);
+    if ((gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
+        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+uint8_t is_line_center(void)
+{
+    uint8_t gray[8];
+
+    MedicineCar_ReadLineSensors(gray);
+    if ((gray[2] == MED_CAR_GRAY_BLACK_LEVEL) ||
+        (gray[3] == MED_CAR_GRAY_BLACK_LEVEL) ||
+        (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) ||
+        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+uint8_t search_line_rotating(int left_pwm, int right_pwm,
+                             uint16_t min_delay_ms, uint16_t timeout_ms,
+                             uint8_t (*aligned_fn)(void))
+{
+    uint32_t elapsed;
+
+    Load(left_pwm, right_pwm);
+    HAL_Delay(min_delay_ms);
+    elapsed = (uint32_t)min_delay_ms;
+
+    while (elapsed < (uint32_t)timeout_ms) {
+        if (aligned_fn() != 0U) {
+            stop(1);
+            return 1U;
+        }
+        HAL_Delay(MED_CAR_TURN_POLL_MS);
+        elapsed += (uint32_t)MED_CAR_TURN_POLL_MS;
+    }
+
+    stop(1);
+    return 0U;
+}
+
+uint8_t sensor_turn_left(void)
+{
+    move_forward_straight(MED_CAR_CROSS_ADVANCE_TICKS,
+                          MED_CAR_CROSS_ADVANCE_PWM);
+    return search_line_rotating(MED_CAR_TURN_LEFT_LEFT_PWM,
+                                MED_CAR_TURN_LEFT_RIGHT_PWM,
+                                MED_CAR_TURN_MIN_MS,
+                                MED_CAR_TURN_TIMEOUT_MS,
+                                is_line_left);
+}
+
+uint8_t sensor_turn_right(void)
+{
+    move_forward_straight(MED_CAR_CROSS_ADVANCE_TICKS,
+                          MED_CAR_CROSS_ADVANCE_PWM);
+    return search_line_rotating(MED_CAR_TURN_RIGHT_LEFT_PWM,
+                                MED_CAR_TURN_RIGHT_RIGHT_PWM,
+                                MED_CAR_TURN_MIN_MS,
+                                MED_CAR_TURN_TIMEOUT_MS,
+                                is_line_right);
+}
+
+uint8_t sensor_diaotou(void)
+{
+
+    return search_line_rotating(MED_CAR_DIAOTOU_LEFT_PWM,
+                                MED_CAR_DIAOTOU_RIGHT_PWM,
+                                MED_CAR_DIAOTOU_MIN_MS,
+                                MED_CAR_DIAOTOU_TIMEOUT_MS,
+                                is_line_center);
+}
+
+uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
+{
+    static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
     uint32_t guard = 0U;
+    int last_direction = 0;
+    uint8_t confirm_count = 0U;
+    int correction;
 
     MedicineCar_ResetEncoders();
-    while (((Encoder_Left + Encoder_Right) < (int)roadsum) && (guard < 800U)) {
-        xunxian(300U, pwm);
-        if ((MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO2) == MED_CAR_GRAY_BLACK_LEVEL) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO3) == MED_CAR_GRAY_BLACK_LEVEL) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO5) == MED_CAR_GRAY_BLACK_LEVEL) &&
-            (MedicineCar_ReadLineSensor(MED_CAR_SENSOR_IO6) == MED_CAR_GRAY_BLACK_LEVEL)) {
-            break;
+
+    {
+        uint8_t warmup_gray[8];
+        int warmup_channel;
+        int warmup_sum = 0;
+
+        MedicineCar_ReadLineSensors(warmup_gray);
+        for (warmup_channel = 0; warmup_channel < 8; warmup_channel++) {
+            if (warmup_gray[warmup_channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                warmup_sum += line_weights[warmup_channel];
+            }
         }
+        if (warmup_sum > 0) {
+            last_direction = 1;
+        } else if (warmup_sum < 0) {
+            last_direction = -1;
+        }
+    }
+
+    while (((Encoder_Left + Encoder_Right) < (int)max_distance) &&
+           (guard < MED_CAR_DOOR_GUARD_MAX)) {
+        uint8_t gray[8];
+        uint8_t line_seen;
+        uint8_t channel;
+        uint8_t black_count;
+        int weighted_sum;
+
+        MedicineCar_ReadLineSensors(gray);
+
+        if (is_wide_black(MED_CAR_DOOR_BLACK_MIN) != 0U) {
+            confirm_count++;
+            if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
+                stop(1);
+                return 1U;
+            }
+        } else {
+            confirm_count = 0U;
+        }
+
+        line_seen = ((gray[0] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[1] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[2] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[3] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[5] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[6] == MED_CAR_GRAY_BLACK_LEVEL) ||
+                     (gray[7] == MED_CAR_GRAY_BLACK_LEVEL)) ? 1U : 0U;
+
+        correction = 0;
+        if (line_seen != 0U) {
+            black_count = 0U;
+            weighted_sum = 0;
+            for (channel = 0U; channel < 8U; channel++) {
+                if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                    weighted_sum += line_weights[channel];
+                    black_count++;
+                }
+            }
+
+            if (black_count > 0U) {
+                correction = (weighted_sum * MED_CAR_LINE_PWM_ADJUST_1) /
+                             (int)black_count;
+                if (correction > 0) {
+                    last_direction = 1;
+                } else if (correction < 0) {
+                    last_direction = -1;
+                } else {
+                    last_direction = 0;
+                }
+            }
+        } else if (last_direction > 0) {
+            correction += MED_CAR_LINE_PWM_ADJUST_3;
+        } else if (last_direction < 0) {
+            correction -= MED_CAR_LINE_PWM_ADJUST_3;
+        }
+
+        Load(trim_run_pwm(pwm - correction, MED_CAR_LEFT_PWM_TRIM_NUM),
+             trim_run_pwm(pwm + correction, MED_CAR_RIGHT_PWM_TRIM_NUM));
+        HAL_Delay(10U);
+        Read_Speed();
         guard++;
     }
+
+    stop(1);
+    return 0U;
+}
+
+static void move_forward_straight(uint16_t distance_ticks, int pwm)
+{
+    uint32_t guard = 0U;
+    uint16_t guard_max;
+
+    guard_max = (uint16_t)((uint32_t)distance_ticks * 3U / 2U);
+    if (guard_max < 200U) {
+        guard_max = 200U;
+    }
+
+    MedicineCar_ResetEncoders();
+
+    while (((Encoder_Left + Encoder_Right) < (int)distance_ticks)
+           && (guard < (uint32_t)guard_max)) {
+        Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
+             trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
+        HAL_Delay(10U);
+        Read_Speed();
+        guard++;
+    }
+
     stop(1);
 }
 

@@ -1,5 +1,5 @@
-import sensor, image, time, pyb
-from pyb import UART
+import sensor, image, time
+from pyb import UART, LED
 
 # =====================================================================
 # 1. 硬件初始化
@@ -11,32 +11,26 @@ sensor.skip_frames(time = 2000)
 sensor.set_auto_gain(False)            # 必须关闭自动增益
 sensor.set_auto_whitebal(False)        # 必须关闭自动白平衡
 
-uart = UART(3, 115200, timeout_char=10)
+# 初始化状态指示灯
+led = LED(2)  # 绿灯
+
+# 核心修改：采用刚才 100% 测通的官方串口 3 标准初始化方法 (P4=TX, P5=RX)
+uart = UART(3, 115200)
+uart.init(115200, bits=8, parity=None, stop=1)
+print('UART3 初始化成功 (P4->TX, P5->RX)')
 
 # =====================================================================
-# 2. 核心模式与参数配置（根据 image_b1ccfb.jpg 现场数据完美微调）
+# 2. 核心参数配置
 # =====================================================================
-# 🌟【测量开关】由于你改小了数字，需要设为 True 重新录入 48 维数组模板。录完请改回 False
-MEASURE_MODE = True
-
-# 黑色数字的灰度阈值
+MEASURE_MODE = False
 BLACK_THRESHOLD = (0, 80)
 
-# 🌟【物理双向大闸：高度与像素数双向夹击】
-# 根据你的控制台日志：
-# 缩小后的数字：高度约 39，像素数约 264
-# 卡片外黑框：高度约 80，像素数约 989
-# 左侧跑道黑线：高度 > 120，像素数 > 1200
-# 极小杂噪：高度 < 15
-MIN_DIGIT_HEIGHT = 22   # 调低高度下限，完美容纳缩小后的数字
-MAX_DIGIT_HEIGHT = 75   # 🌟 设高度上限，直接拦截 80 的卡片框与 120 的跑道线！
+MIN_DIGIT_HEIGHT = 22
+MAX_DIGIT_HEIGHT = 75
+MIN_DIGIT_PIXELS = 120
+MAX_DIGIT_PIXELS = 650
 
-MIN_DIGIT_PIXELS = 120  # 调低像素下限，放行缩小的数字
-MAX_DIGIT_PIXELS = 650  # 🌟 设像素上限，直接拦截大块黑线和外框！
-
-# =====================================================================
-# 3. 1-8 数字特征数据库 (重新测量后请将控制台打印的新数组替换到这里)
-# =====================================================================
+# 你的黄金特征数据库
 DIGIT_TEMPLATES = {
     "1": [186, 75, 59, 146, 195, 196, 78, 187, 61, 136, 195, 196, 192, 193, 61, 122, 196, 196, 192, 193, 64, 108, 195, 196, 193, 193, 67, 93, 195, 196, 192, 192, 71, 78, 195, 195, 190, 192, 80, 65, 193, 193, 60, 57, 51, 53, 54, 57],
     "2": [174, 91, 51, 70, 178, 179, 82, 173, 75, 72, 179, 180, 179, 179, 71, 75, 180, 180, 180, 180, 66, 77, 180, 180, 181, 181, 63, 80, 180, 180, 182, 181, 60, 83, 181, 180, 181, 181, 59, 84, 180, 179, 56, 55, 49, 50, 52, 53],
@@ -49,11 +43,12 @@ DIGIT_TEMPLATES = {
 }
 
 # =====================================================================
-# 4. 辅助函数
+# 4. 辅助函数与三维立体特征拦截器
 # =====================================================================
 def send_to_stm32(left, right):
     packet = bytes([0xAA, 0xBB, int(left), int(right), 0xCC])
     uart.write(packet)
+    led.toggle()  # 每次成功送出数据，翻转一次绿灯状态，用于肉眼观测
 
 def extract_features(img, blob):
     w_step = blob.w() / 6
@@ -68,13 +63,66 @@ def extract_features(img, blob):
             features.append(img.get_pixel(px, py))
     return features
 
+def verify_is_really_2(img, blob):
+    tr_start_x = int(blob.x() + blob.w() * 0.5)
+    tr_end_x = int(blob.x() + blob.w())
+    tr_start_y = int(blob.y())
+    tr_end_y = int(blob.y() + blob.h() * 0.3)
+
+    tr_black = 0
+    tr_total = 0
+    for y in range(tr_start_y, tr_end_y):
+        for x in range(tr_start_x, tr_end_x):
+            if x < img.width() and y < img.height():
+                tr_total += 1
+                if img.get_pixel(x, y) < 110:
+                    tr_black += 1
+    tr_ratio = (tr_black / tr_total * 100) if tr_total > 0 else 0
+
+    mid_start_y = int(blob.y() + blob.h() * 0.3)
+    mid_end_y = int(blob.y() + blob.h() * 0.6)
+    mid_black = 0
+    mid_total = 0
+    for y in range(mid_start_y, mid_end_y):
+        for x in range(blob.x(), blob.x() + blob.w()):
+            if x < img.width() and y < img.height():
+                mid_total += 1
+                if img.get_pixel(x, y) < 110:
+                    mid_black += 1
+    mid_ratio = (mid_black / mid_total * 100) if mid_total > 0 else 0
+
+    bl_start_x = int(blob.x())
+    bl_end_x = int(blob.x() + blob.w() * 0.4)
+    bl_start_y = int(blob.y() + blob.h() * 0.6)
+    bl_end_y = int(blob.y() + blob.h() * 0.95)
+    bl_black = 0
+    bl_total = 0
+    for y in range(bl_start_y, bl_end_y):
+        for x in range(bl_start_x, bl_end_x):
+            if x < img.width() and y < img.height():
+                bl_total += 1
+                if img.get_pixel(x, y) < 110:
+                    bl_black += 1
+    bl_ratio = (bl_black / bl_total * 100) if bl_total > 0 else 0
+
+    if tr_ratio > 22 and bl_ratio < 20:
+        return "IS_7"
+    if bl_ratio > 8 and mid_ratio > 18:
+        return "IS_2"
+    return "IS_1"
+
 # =====================================================================
-# 5. 单帧检测与 STM32 请求-响应协议
+# 5. 主循环
 # =====================================================================
 clock = time.clock()
-print("====== UART 请求-响应模式：等待 STM32 REQ ======")
 
-def find_valid_targets(img):
+# 新增计时器变量，防止串口发得太密冲爆单片机
+last_send_time = time.ticks_ms()
+
+while(True):
+    clock.tick()
+    img = sensor.snapshot()
+
     blobs = img.find_blobs([BLACK_THRESHOLD], pixels_threshold=80, area_threshold=80, merge=True)
     valid_targets = []
 
@@ -85,105 +133,69 @@ def find_valid_targets(img):
            (MIN_DIGIT_PIXELS <= blob.pixels() <= MAX_DIGIT_PIXELS):
             img.draw_rectangle(blob.rect(), color=127)
             valid_targets.append(blob)
-        else:
-            if MEASURE_MODE and blob.h() > 5:
-                print("【被过滤杂噪】高:%d, 像素数:%d" % (blob.h(), blob.pixels()))
 
     valid_targets.sort(key=lambda b: b.x())
-    return valid_targets
 
-def match_digit(img, blob, label):
-    features = extract_features(img, blob)
+    left_result = 0
+    right_result = 0
 
-    if MEASURE_MODE:
-        print("【测量模式】%s框新特征数组 = %s" % (label, features))
+    if len(valid_targets) > 0:
+        b_left = valid_targets[0]
+        features_left = extract_features(img, b_left)
 
-    min_dist = 999999
-    match_result = 0
-    for digit, template in DIGIT_TEMPLATES.items():
-        dist = sum(abs(f - t) for f, t in zip(features, template))
-        if dist < min_dist:
-            min_dist = dist
-            match_result = int(digit)
+        min_dist = 999999
+        match_digit = 0
+        for digit, template in DIGIT_TEMPLATES.items():
+            dist = sum(abs(f - t) for f, t in zip(features_left, template))
+            if dist < min_dist:
+                min_dist = dist
+                match_digit = int(digit)
 
-    if MEASURE_MODE:
-        print("   -> (%s) 匹配数字: %d, SAD距离: %d" % (label, match_result, min_dist))
+        if match_digit in [1, 2, 7]:
+            judge = verify_is_really_2(img, b_left)
+            if judge == "IS_7":
+                match_digit = 7
+            elif judge == "IS_2":
+                match_digit = 2
+            else:
+                match_digit = 1
 
-    max_allow_dist = 999999 if MEASURE_MODE else 3500
-    if min_dist > max_allow_dist:
-        return None
+        MAX_ALLOW_DIST = 3500
+        if min_dist <= MAX_ALLOW_DIST:
+            left_result = match_digit
+            img.draw_rectangle(b_left.rect(), color=255, thickness=2)
+            img.draw_string(b_left.x(), b_left.y()-14, "L:"+str(left_result), color=255, scale=1.2)
 
-    img.draw_rectangle(blob.rect(), color=255, thickness=2)
-    img.draw_string(blob.x(), blob.y()-14, label + ":" + str(match_result), color=255, scale=1.2)
-    return str(match_result)
+    if len(valid_targets) > 1:
+        b_right = valid_targets[1]
+        features_right = extract_features(img, b_right)
 
-def detect_digits_once():
-    clock.tick()
-    img = sensor.snapshot()
-    valid_targets = find_valid_targets(img)
-    results = []
+        min_dist = 999999
+        match_digit = 0
+        for digit, template in DIGIT_TEMPLATES.items():
+            dist = sum(abs(f - t) for f, t in zip(features_right, template))
+            if dist < min_dist:
+                min_dist = dist
+                match_digit = int(digit)
 
-    for index, blob in enumerate(valid_targets[:4]):
-        digit = match_digit(img, blob, str(index + 1))
-        if digit:
-            results.append(digit)
+        if match_digit in [1, 2, 7]:
+            judge = verify_is_really_2(img, b_right)
+            if judge == "IS_7":
+                match_digit = 7
+            elif judge == "IS_2":
+                match_digit = 2
+            else:
+                match_digit = 1
 
-    print("【当前检测】:", results, " | 独立有效目标数:", len(valid_targets))
-    return tuple(results)
+        MAX_ALLOW_DIST = 3500
+        if min_dist <= MAX_ALLOW_DIST:
+            right_result = match_digit
+            img.draw_rectangle(b_right.rect(), color=255, thickness=2)
+            img.draw_string(b_right.x(), b_right.y()-14, "R:"+str(right_result), color=255, scale=1.2)
 
-def read_uart_line(timeout_ms=10):
-    start = time.ticks_ms()
-    chars = []
-
-    while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
-        if uart.any():
-            data = uart.read(1)
-            if data:
-                ch = chr(data[0])
-                if ch == "\r":
-                    continue
-                if ch == "\n":
-                    return "".join(chars)
-                chars.append(ch)
-        else:
-            time.sleep_ms(1)
-
-    return None
-
-def recognize_for_request(timeout_ms=2000, confirm_target=3):
-    start = time.ticks_ms()
-    last_result = None
-    confirm_count = 0
-
-    while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
-        current_result = detect_digits_once()
-
-        if current_result and current_result == last_result:
-            confirm_count += 1
-        else:
-            confirm_count = 1
-            last_result = current_result
-
-        if current_result and confirm_count >= confirm_target:
-            return current_result
-
-    return None
-
-def send_result(result):
-    if result:
-        fields = ["OK", str(len(result))]
-        fields.extend(result)
-        uart.write(",".join(fields) + "\r\n")
-        pyb.LED(3).on()
-        time.sleep_ms(60)
-        pyb.LED(3).off()
-    else:
-        uart.write("ERR,NONE\r\n")
-
-while(True):
-    request = read_uart_line(timeout_ms=20)
-    if request == "REQ":
-        print("【STM32请求识别】REQ")
-        send_result(recognize_for_request(timeout_ms=2000, confirm_target=3))
-    else:
-        time.sleep_ms(100)
+    # 🌟 串口限速发送逻辑优化：
+    # 图像识别频率通常高达每秒几十帧，但 STM32 没必要接收得这么密。
+    # 这里限制每隔 100 毫秒（每秒 10 次）向 STM32 或者 DAPLink 发送一次当前识别到的最新结果。
+    if time.ticks_diff(time.ticks_ms(), last_send_time) > 100:
+        send_to_stm32(left_result, right_result)
+        last_send_time = time.ticks_ms()

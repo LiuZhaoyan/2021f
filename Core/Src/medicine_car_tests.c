@@ -137,7 +137,51 @@ static void debug_led_beep_test_loop(void)
 static void debug_route_test_loop(uint8_t target_room)
 {
     u2_printf("\r\nRoute %u test start\r\n", target_room);
-    MedicineCar_RequestRun(target_room);
+    MedicineCar_SetRecognizedNumber(0U);
+    u2_printf("Waiting for drug load, raw=%s interpreted=%s\r\n",
+              (MedicineCar_ReadDrugSensorRaw() != 0U) ? "HIGH" : "LOW",
+              (MedicineCar_ReadDrugPresent() != 0U) ? "PRESENT" : "ABSENT");
+
+    while (MedicineCar_ReadDrugPresent() == 0U) {
+        MedicineCarPlatform_Service();
+        delay_ms(100U);
+    }
+
+    u2_printf("Drug loaded, requesting vision target=%u\r\n", target_room);
+
+    while (N != (int)target_room) {
+        MedicineCarVisionResult result;
+
+        if (MedicineCarVision_Request(&result,
+                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
+            uint8_t index;
+
+            u2_printf("VISION OK count=%u digits=", result.count);
+            for (index = 0U; index < result.count; index++) {
+                u2_printf("%u", result.digits[index]);
+                if (result.digits[index] == target_room) {
+                    MedicineCar_SetRecognizedNumber(result.digits[index]);
+                }
+                if (index != (uint8_t)(result.count - 1U)) {
+                    u2_printf(",");
+                }
+            }
+            u2_printf("\r\n");
+        } else {
+            u2_printf("VISION ERR %s raw='%s'\r\n",
+                      MedicineCarVision_LastStatusText(),
+                      MedicineCarVision_LastLine());
+        }
+
+        if (N != (int)target_room) {
+            u2_printf("Waiting for target %u recognition...\r\n", target_room);
+        }
+
+        MedicineCarPlatform_Service();
+        delay_ms(MED_CAR_TEST_VISION_PRINT_MS);
+    }
+
+    u2_printf("Vision recognized target N=%d, starting route\r\n", N);
     MedicineCar_Step();
     Load(0, 0);
     u2_printf("Route %u test done, idle now\r\n", target_room);
@@ -145,6 +189,111 @@ static void debug_route_test_loop(uint8_t target_room)
     while (1) {
         MedicineCarPlatform_Service();
         delay_ms(1000U);
+    }
+}
+
+static void print_vision_digits(const MedicineCarVisionResult *result)
+{
+    uint8_t index;
+
+    if (result == 0) {
+        return;
+    }
+
+    u2_printf("VISION OK count=%u digits=", result->count);
+    for (index = 0U; index < result->count; index++) {
+        u2_printf("%u", result->digits[index]);
+        if (index != (uint8_t)(result->count - 1U)) {
+            u2_printf(",");
+        }
+    }
+    u2_printf("\r\n");
+}
+
+static uint8_t find_route3_8_target(const MedicineCarVisionResult *result)
+{
+    uint8_t index;
+
+    if (result == 0) {
+        return 0U;
+    }
+
+    for (index = 0U; index < result->count; index++) {
+        if ((result->digits[index] >= 3U) && (result->digits[index] <= 8U)) {
+            return result->digits[index];
+        }
+    }
+
+    return 0U;
+}
+
+static void debug_route3_8_test_loop(void)
+{
+    uint8_t cached_target = 0U;
+    uint8_t success;
+    uint32_t drug_wait_ms = 0U;
+
+    Load(0, 0);
+    MedicineCar_SetRecognizedNumber(0U);
+    u2_printf("\r\n=== ROUTE3_8 DYNAMIC TEST ===\r\n");
+    u2_printf("Waiting for vision target 3..8\r\n");
+
+    while (cached_target == 0U) {
+        MedicineCarVisionResult result;
+
+        if (MedicineCarVision_Request(&result,
+                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
+            print_vision_digits(&result);
+            cached_target = find_route3_8_target(&result);
+            if (cached_target != 0U) {
+                u2_printf("CACHED target=%u\r\n", cached_target);
+            } else {
+                u2_printf("No 3..8 target in vision result\r\n");
+            }
+        } else {
+            u2_printf("VISION ERR %s raw='%s'\r\n",
+                      MedicineCarVision_LastStatusText(),
+                      MedicineCarVision_LastLine());
+        }
+
+        if (cached_target == 0U) {
+            MedicineCarPlatform_Service();
+            delay_ms(MED_CAR_TEST_R3_8_VISION_INTERVAL_MS);
+        }
+    }
+
+    u2_printf("Target cached=%u, waiting for drug PRESENT\r\n",
+              cached_target);
+    u2_printf("DRUG raw=%s interpreted=%s\r\n",
+              (MedicineCar_ReadDrugSensorRaw() != 0U) ? "HIGH" : "LOW",
+              (MedicineCar_ReadDrugPresent() != 0U) ? "PRESENT" : "ABSENT");
+
+    while (MedicineCar_ReadDrugPresent() == 0U) {
+        MedicineCarPlatform_Service();
+        delay_ms(MED_CAR_TEST_R3_8_DRUG_POLL_MS);
+        drug_wait_ms += MED_CAR_TEST_R3_8_DRUG_POLL_MS;
+        if (drug_wait_ms >= MED_CAR_TEST_R3_8_IDLE_PRINT_MS) {
+            drug_wait_ms = 0U;
+            u2_printf("Waiting drug, raw=%s interpreted=%s\r\n",
+                      (MedicineCar_ReadDrugSensorRaw() != 0U) ? "HIGH" : "LOW",
+                      (MedicineCar_ReadDrugPresent() != 0U) ? "PRESENT" : "ABSENT");
+        }
+    }
+
+    u2_printf("Drug PRESENT, start route3_8 target=%u\r\n", cached_target);
+    success = MedicineCar_RunRoute3To8Test(cached_target);
+    Load(0, 0);
+    if (success != 0U) {
+        MedicineCar_SetGreenLed(1U);
+    }
+
+    u2_printf("ROUTE3_8 test complete success=%u, idle loop\r\n", success);
+    while (1) {
+        MedicineCarPlatform_Service();
+        u2_printf("ROUTE3_8 idle success=%u target=%u\r\n",
+                  success,
+                  cached_target);
+        delay_ms(MED_CAR_TEST_R3_8_IDLE_PRINT_MS);
     }
 }
 
@@ -237,7 +386,7 @@ static void debug_wheel_match_test_loop(void)
 static void debug_vision_uart_test_loop(void)
 {
     u2_printf("\r\nVision UART test start, USART3 115200 8N1\r\n");
-    u2_printf("Protocol: STM32 sends REQ, expects OK,count,digits or ERR,NONE\r\n");
+    u2_printf("Protocol: OpenMV streams AA BB left right CC every 100 ms\r\n");
 
     while (1) {
         MedicineCarVisionResult result;
@@ -246,7 +395,9 @@ static void debug_vision_uart_test_loop(void)
                                       MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
             uint8_t index;
 
-            u2_printf("VISION OK count=%u digits=", result.count);
+            u2_printf("VISION OK raw='%s' count=%u digits=",
+                      MedicineCarVision_LastLine(),
+                      result.count);
             for (index = 0U; index < result.count; index++) {
                 u2_printf("%u", result.digits[index]);
                 if (index != (uint8_t)(result.count - 1U)) {
@@ -255,7 +406,9 @@ static void debug_vision_uart_test_loop(void)
             }
             u2_printf("\r\n");
         } else {
-            u2_printf("VISION ERR timeout or invalid response\r\n");
+            u2_printf("VISION ERR %s raw='%s'\r\n",
+                      MedicineCarVision_LastStatusText(),
+                      MedicineCarVision_LastLine());
         }
 
         delay_ms(MED_CAR_TEST_VISION_PRINT_MS);
@@ -274,6 +427,62 @@ static void debug_drug_sensor_test_loop(void)
                   (raw != 0U) ? "HIGH" : "LOW",
                   (present != 0U) ? "PRESENT" : "ABSENT");
         delay_ms(MED_CAR_TEST_DRUG_PRINT_MS);
+    }
+}
+
+static void debug_sensor_turns_test_loop(void)
+{
+    u2_printf("\r\nSensor turns test start\r\n");
+    u2_printf("Place car at a cross intersection, then press any key...\r\n");
+    Load(0, 0);
+    delay_ms(3000U);
+
+    while (1) {
+        uint8_t result;
+
+        u2_printf("--- Sensor turn LEFT ---\r\n");
+        result = sensor_turn_left();
+        u2_printf("Turn LEFT result: %s\r\n",
+                  (result != 0U) ? "OK" : "TIMEOUT");
+        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
+
+        u2_printf("--- Sensor turn RIGHT ---\r\n");
+        result = sensor_turn_right();
+        u2_printf("Turn RIGHT result: %s\r\n",
+                  (result != 0U) ? "OK" : "TIMEOUT");
+        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
+
+        u2_printf("--- Sensor DIAOTOU ---\r\n");
+        result = sensor_diaotou();
+        u2_printf("Diaotou result: %s\r\n",
+                  (result != 0U) ? "OK" : "TIMEOUT");
+        delay_ms(MED_CAR_TEST_SENSOR_TURN_PAUSE_MS);
+
+        u2_printf("Sensor turns cycle done\r\n");
+    }
+}
+
+static void debug_sensor_door_test_loop(void)
+{
+    u2_printf("\r\nSensor door detection test start\r\n");
+    u2_printf("Place car on branch line before dashed door zone\r\n");
+    Load(0, 0);
+    delay_ms(3000U);
+
+    while (1) {
+        uint8_t result;
+
+        print_gray_snapshot("DOOR BEFORE");
+        u2_printf("Driving until door dashed line, max=%u pwm=%d\r\n",
+                  MED_CAR_TEST_SENSOR_DOOR_DISTANCE,
+                  MED_CAR_TEST_SENSOR_DOOR_PWM);
+
+        result = xunxian_until_door(MED_CAR_TEST_SENSOR_DOOR_DISTANCE,
+                                    MED_CAR_TEST_SENSOR_DOOR_PWM);
+        print_gray_snapshot("DOOR AFTER");
+        u2_printf("Door detection result: %s\r\n",
+                  (result != 0U) ? "DETECTED" : "MAX_DISTANCE");
+        delay_ms(MED_CAR_TEST_SENSOR_DOOR_PAUSE_MS);
     }
 }
 
@@ -299,6 +508,12 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_vision_uart_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_DRUG_SENSOR
     debug_drug_sensor_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_SENSOR_TURNS
+    debug_sensor_turns_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_SENSOR_DOOR
+    debug_sensor_door_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE3_8
+    debug_route3_8_test_loop();
 #else
     return;
 #endif

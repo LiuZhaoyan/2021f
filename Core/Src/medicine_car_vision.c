@@ -6,8 +6,31 @@
 #include "medicine_car_config.h"
 #include "usart.h"
 
-#define VISION_REQUEST_TEXT "REQ\r\n"
 #define VISION_RX_LINE_MAX  32U
+#define VISION_FRAME_HEAD_0 0xAAU
+#define VISION_FRAME_HEAD_1 0xBBU
+#define VISION_FRAME_TAIL   0xCCU
+#define VISION_PACKET_SIZE  5U
+#define VISION_SNIFF_MAX    10U
+
+static MedicineCarVisionStatus last_status = MED_CAR_VISION_STATUS_OK;
+static char last_line[VISION_RX_LINE_MAX];
+
+static void vision_set_status(MedicineCarVisionStatus status)
+{
+    last_status = status;
+}
+
+static void vision_set_last_line(const char *line)
+{
+    if (line == NULL) {
+        last_line[0] = '\0';
+        return;
+    }
+
+    (void)strncpy(last_line, line, sizeof(last_line) - 1U);
+    last_line[sizeof(last_line) - 1U] = '\0';
+}
 
 static void vision_clear_result(MedicineCarVisionResult *out)
 {
@@ -16,14 +39,14 @@ static void vision_clear_result(MedicineCarVisionResult *out)
     }
 }
 
-static void vision_flush_rx(void)
+static void vision_prepare_rx(void)
 {
-#if MED_CAR_ENABLE_RECOGNITION_UART
-    uint8_t byte;
-
-    while (HAL_UART_Receive(&huart3, &byte, 1U, 0U) == HAL_OK) {
-    }
-#endif
+    __HAL_UART_CLEAR_PEFLAG(&huart3);
+    __HAL_UART_CLEAR_FEFLAG(&huart3);
+    __HAL_UART_CLEAR_NEFLAG(&huart3);
+    __HAL_UART_CLEAR_OREFLAG(&huart3);
+    __HAL_UART_FLUSH_DRREGISTER(&huart3);
+    huart3.ErrorCode = HAL_UART_ERROR_NONE;
 }
 
 static uint32_t remaining_timeout(uint32_t start, uint32_t timeout_ms)
@@ -36,104 +59,160 @@ static uint32_t remaining_timeout(uint32_t start, uint32_t timeout_ms)
     return timeout_ms - elapsed;
 }
 
-static uint8_t vision_read_line(char *line, uint32_t line_size, uint32_t timeout_ms)
+static void vision_format_packet(const uint8_t packet[VISION_PACKET_SIZE])
 {
-    uint32_t start = HAL_GetTick();
+    static const char hex[] = "0123456789ABCDEF";
+    uint32_t i;
     uint32_t pos = 0U;
 
-    if ((line == NULL) || (line_size == 0U)) {
+    if (packet == NULL) {
+        vision_set_last_line(NULL);
+        return;
+    }
+
+    for (i = 0U; i < VISION_PACKET_SIZE; i++) {
+        if ((pos + 3U) >= sizeof(last_line)) {
+            break;
+        }
+        last_line[pos++] = hex[(packet[i] >> 4U) & 0x0FU];
+        last_line[pos++] = hex[packet[i] & 0x0FU];
+        if (i != (VISION_PACKET_SIZE - 1U)) {
+            last_line[pos++] = ' ';
+        }
+    }
+    last_line[pos] = '\0';
+}
+
+static void vision_format_bytes(const uint8_t *bytes, uint32_t size)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    uint32_t i;
+    uint32_t pos = 0U;
+
+    if ((bytes == NULL) || (size == 0U)) {
+        vision_set_last_line(NULL);
+        return;
+    }
+
+    for (i = 0U; i < size; i++) {
+        if ((pos + 3U) >= sizeof(last_line)) {
+            break;
+        }
+        last_line[pos++] = hex[(bytes[i] >> 4U) & 0x0FU];
+        last_line[pos++] = hex[bytes[i] & 0x0FU];
+        if (i != (size - 1U)) {
+            last_line[pos++] = ' ';
+        }
+    }
+    last_line[pos] = '\0';
+}
+
+static uint8_t vision_read_packet(uint8_t packet[VISION_PACKET_SIZE],
+                                  uint32_t timeout_ms)
+{
+    uint32_t start = HAL_GetTick();
+    uint8_t sniff[VISION_SNIFF_MAX];
+    uint32_t sniff_count = 0U;
+    uint8_t state = 0U;
+    uint8_t byte;
+
+    if (packet == NULL) {
         return 0U;
     }
 
     while (remaining_timeout(start, timeout_ms) > 0U) {
-        uint8_t byte;
         uint32_t wait_ms = remaining_timeout(start, timeout_ms);
 
         if (HAL_UART_Receive(&huart3, &byte, 1U, wait_ms) != HAL_OK) {
+            if (sniff_count > 0U) {
+                vision_format_bytes(sniff, sniff_count);
+            }
             break;
         }
 
-        if (byte == '\r') {
-            continue;
-        }
-        if (byte == '\n') {
-            line[pos] = '\0';
-            return (pos > 0U) ? 1U : 0U;
+        if (sniff_count < VISION_SNIFF_MAX) {
+            sniff[sniff_count++] = byte;
         }
 
-        if (pos >= (line_size - 1U)) {
-            line[line_size - 1U] = '\0';
-            return 0U;
+        switch (state) {
+        case 0U:
+            if (byte == VISION_FRAME_HEAD_0) {
+                packet[0] = byte;
+                state = 1U;
+            }
+            break;
+        case 1U:
+            if (byte == VISION_FRAME_HEAD_1) {
+                packet[1] = byte;
+                state = 2U;
+            } else {
+                if (byte == VISION_FRAME_HEAD_0) {
+                    packet[0] = byte;
+                    state = 1U;
+                } else {
+                    state = 0U;
+                }
+            }
+            break;
+        case 2U:
+            packet[2] = byte;
+            state = 3U;
+            break;
+        case 3U:
+            packet[3] = byte;
+            state = 4U;
+            break;
+        default:
+            if (byte == VISION_FRAME_TAIL) {
+                packet[4] = byte;
+                vision_format_packet(packet);
+                return 1U;
+            }
+            if (byte == VISION_FRAME_HEAD_0) {
+                packet[0] = byte;
+                state = 1U;
+            } else {
+                state = 0U;
+            }
+            break;
         }
-        line[pos++] = (char)byte;
     }
 
-    line[pos] = '\0';
+    if (sniff_count > 0U) {
+        vision_format_bytes(sniff, sniff_count);
+    }
     return 0U;
 }
 
-static uint8_t parse_digit(const char **cursor, uint8_t *digit)
+static uint8_t vision_parse_packet(const uint8_t packet[VISION_PACKET_SIZE],
+                                   MedicineCarVisionResult *out)
 {
-    const char *p;
-
-    if ((cursor == NULL) || (*cursor == NULL) || (digit == NULL)) {
-        return 0U;
-    }
-
-    p = *cursor;
-    if ((*p < '0') || (*p > '9')) {
-        return 0U;
-    }
-
-    *digit = (uint8_t)(*p - '0');
-    p++;
-    *cursor = p;
-    return 1U;
-}
-
-static uint8_t vision_parse_ok_line(const char *line, MedicineCarVisionResult *out)
-{
-    const char *p;
-    uint8_t count;
-    uint8_t index;
     MedicineCarVisionResult parsed;
+    uint8_t left;
+    uint8_t right;
 
-    if ((line == NULL) || (out == NULL)) {
-        return 0U;
-    }
-
-    if (strncmp(line, "OK,", 3U) != 0) {
+    if ((packet == NULL) || (out == NULL)) {
         return 0U;
     }
 
-    p = line + 3U;
-    if ((*p < '1') || (*p > '4')) {
+    if ((packet[0] != VISION_FRAME_HEAD_0) ||
+        (packet[1] != VISION_FRAME_HEAD_1) ||
+        (packet[4] != VISION_FRAME_TAIL)) {
         return 0U;
     }
-    count = (uint8_t)(*p - '0');
-    p++;
-    if (*p != ',') {
+
+    left = packet[2];
+    right = packet[3];
+    if ((left > 8U) || (right > 8U)) {
         return 0U;
     }
-    p++;
 
     memset(&parsed, 0, sizeof(parsed));
-    parsed.count = count;
-    for (index = 0U; index < count; index++) {
-        if (parse_digit(&p, &parsed.digits[index]) == 0U) {
-            return 0U;
-        }
-
-        if (index == (uint8_t)(count - 1U)) {
-            if (*p != '\0') {
-                return 0U;
-            }
-        } else {
-            if (*p != ',') {
-                return 0U;
-            }
-            p++;
-        }
+    if (left != 0U) {
+        parsed.digits[parsed.count++] = left;
+    }
+    if (right != 0U) {
+        parsed.digits[parsed.count++] = right;
     }
 
     *out = parsed;
@@ -143,30 +222,71 @@ static uint8_t vision_parse_ok_line(const char *line, MedicineCarVisionResult *o
 uint8_t MedicineCarVision_Request(MedicineCarVisionResult *out, uint32_t timeout_ms)
 {
 #if MED_CAR_ENABLE_RECOGNITION_UART
-    static const uint8_t request[] = VISION_REQUEST_TEXT;
-    char line[VISION_RX_LINE_MAX];
+    uint8_t packet[VISION_PACKET_SIZE];
 
+    vision_set_last_line(NULL);
     vision_clear_result(out);
     if (out == NULL) {
+        vision_set_status(MED_CAR_VISION_STATUS_BAD_ARG);
         return 0U;
     }
 
-    vision_flush_rx();
-    if (HAL_UART_Transmit(&huart3,
-                          (uint8_t *)request,
-                          (uint16_t)(sizeof(request) - 1U),
-                          50U) != HAL_OK) {
+    vision_prepare_rx();
+    if (vision_read_packet(packet, timeout_ms) == 0U) {
+        if (huart3.ErrorCode != HAL_UART_ERROR_NONE) {
+            vision_set_status(MED_CAR_VISION_STATUS_RX_ERROR);
+        } else {
+            vision_set_status(MED_CAR_VISION_STATUS_TIMEOUT);
+        }
         return 0U;
     }
 
-    if (vision_read_line(line, sizeof(line), timeout_ms) == 0U) {
-        return 0U;
+    if (vision_parse_packet(packet, out) != 0U) {
+        vision_set_status(MED_CAR_VISION_STATUS_OK);
+        return 1U;
     }
 
-    return vision_parse_ok_line(line, out);
+    vision_set_status(MED_CAR_VISION_STATUS_INVALID_RESPONSE);
+    return 0U;
 #else
     (void)timeout_ms;
+    vision_set_last_line(NULL);
+    vision_set_status(MED_CAR_VISION_STATUS_DISABLED);
     vision_clear_result(out);
     return 0U;
 #endif
+}
+
+MedicineCarVisionStatus MedicineCarVision_LastStatus(void)
+{
+    return last_status;
+}
+
+const char *MedicineCarVision_LastStatusText(void)
+{
+    switch (last_status) {
+    case MED_CAR_VISION_STATUS_OK:
+        return "ok";
+    case MED_CAR_VISION_STATUS_BAD_ARG:
+        return "bad arg";
+    case MED_CAR_VISION_STATUS_DISABLED:
+        return "uart disabled";
+    case MED_CAR_VISION_STATUS_TX_ERROR:
+        return "tx error";
+    case MED_CAR_VISION_STATUS_RX_ERROR:
+        return "rx error";
+    case MED_CAR_VISION_STATUS_TIMEOUT:
+        return "timeout";
+    case MED_CAR_VISION_STATUS_REMOTE_ERR:
+        return "remote err";
+    case MED_CAR_VISION_STATUS_INVALID_RESPONSE:
+        return "invalid response";
+    default:
+        return "unknown";
+    }
+}
+
+const char *MedicineCarVision_LastLine(void)
+{
+    return last_line;
 }
