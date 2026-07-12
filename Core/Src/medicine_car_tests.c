@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "medicine_car_app.h"
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
 #include "medicine_car_return.h"
@@ -138,12 +139,11 @@ static void debug_route_test_loop(void)
 {
     uint8_t target = 0U;
 
-    Return_Init();
     N = 0;
     Load(0, 0);
     MedicineCar_SetGreenLed(0U);
 
-    u2_printf("\r\n=== ROUTE 1/2 TEST (return module) ===\r\n");
+    u2_printf("\r\n=== ROUTE 1/2 TEST (route table) ===\r\n");
 
     u2_printf("[Phase 1] waiting for vision (room 1 or 2)...\r\n");
     while (target == 0U) {
@@ -180,47 +180,8 @@ static void debug_route_test_loop(void)
     }
     u2_printf("[Phase 2] done: drug loaded\r\n");
 
-    u2_printf("[Phase 3] xunxian to intersection, distance=%u\r\n",
-              MED_CAR_DISTANCE_FIRST_CHECK);
-    delay_ms(1000U);
-    xunxian(MED_CAR_DISTANCE_FIRST_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
-
-    if (target == 1U) {
-        u2_printf("[Phase 3] push LEFT, turn into left branch\r\n");
-        Return_Push(RETURN_DIR_LEFT);
-        sensor_turn_left();
-    } else {
-        u2_printf("[Phase 3] push RIGHT, turn into right branch\r\n");
-        Return_Push(RETURN_DIR_RIGHT);
-        sensor_turn_right();
-    }
-
-    u2_printf("[Phase 4] xunxian to door, max=%u\r\n",
-              MED_CAR_DISTANCE_MID);
-    xunxian_until_door(MED_CAR_DISTANCE_MID, MED_CAR_TEST_GRAY_TRACE_PWM);
-
-    u2_printf("[Phase 5] waiting for drug removal...\r\n");
-    {
-        uint32_t waited = 0U;
-
-        MedicineCar_SetRedLed(1U);
-        Load(0, 0);
-        while ((MedicineCar_ReadDrugPresent() != 0U) &&
-               (waited < MED_CAR_DELIVERY_WAIT_TIMEOUT_MS)) {
-            Load(0, 0);
-            delay_ms(20U);
-            waited += 20U;
-        }
-        MedicineCar_SetRedLed(0U);
-    }
-    u2_printf("[Phase 5] done: drug removed\r\n");
-
-    u2_printf("[Phase 6] Return_Execute: diaotou + reverse stack + head home\r\n");
-    Return_Execute(MED_CAR_DISTANCE_FIRST_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
-
-    u2_printf("=== TEST COMPLETE: returned to start ===\r\n");
-    MedicineCar_SetGreenLed(1U);
-    Load(0, 0);
+    u2_printf("[Phase 3] route_run target=%u\r\n", target);
+    (void)MedicineCar_RunRoute12Test(target);
 
     while (1) {
         MedicineCarPlatform_Service();

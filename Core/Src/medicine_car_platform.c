@@ -607,6 +607,7 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
     uint8_t confirm_count = 0U;
     uint8_t miss_count = 0U;
     uint8_t door_region = 0U;
+    uint8_t prev_black_count = 0U;
     int correction;
 
     MedicineCar_ResetEncoders();
@@ -669,11 +670,21 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
                 gray[1] == MED_CAR_GRAY_WHITE_LEVEL &&
                 gray[6] == MED_CAR_GRAY_WHITE_LEVEL &&
                 gray[7] == MED_CAR_GRAY_WHITE_LEVEL) {
-                miss_count = 0U;
-                confirm_count++;
-                if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
-                    stop(1);
-                    return 1U;
+                if (prev_black_count >= MED_CAR_DOOR_BLACK_MIN ||
+                    prev_black_count <= 1U) {
+                    miss_count = 0U;
+                    confirm_count++;
+                    if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
+                        stop(1);
+                        return 1U;
+                    }
+                } else {
+                    miss_count++;
+                    if (miss_count >= MED_CAR_DOOR_MISS_MAX) {
+                        door_region = 0U;
+                        confirm_count = 0U;
+                        miss_count = 0U;
+                    }
                 }
             } else {
                 miss_count++;
@@ -726,6 +737,7 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
              trim_run_pwm(pwm + correction, MED_CAR_RIGHT_PWM_TRIM_NUM));
         HAL_Delay(10U);
         Read_Speed();
+        prev_black_count = black_count;
         guard++;
     }
 
@@ -735,10 +747,12 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
 
 static uint8_t fork_detected(const uint8_t gray[8])
 {
-    uint8_t left  = (gray[0] == MED_CAR_GRAY_BLACK_LEVEL ||
-                     gray[1] == MED_CAR_GRAY_BLACK_LEVEL);
-    uint8_t right = (gray[6] == MED_CAR_GRAY_BLACK_LEVEL ||
-                     gray[7] == MED_CAR_GRAY_BLACK_LEVEL);
+    uint8_t left  = (gray[0] == MED_CAR_GRAY_BLACK_LEVEL &&
+                     gray[1] == MED_CAR_GRAY_BLACK_LEVEL &&
+                     gray[2] == MED_CAR_GRAY_BLACK_LEVEL);
+    uint8_t right = (gray[6] == MED_CAR_GRAY_BLACK_LEVEL &&
+                     gray[7] == MED_CAR_GRAY_BLACK_LEVEL &&
+                     gray[5] == MED_CAR_GRAY_BLACK_LEVEL);
     return (left || right) ? 1U : 0U;
 }
 

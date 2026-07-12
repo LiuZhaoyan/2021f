@@ -11,6 +11,7 @@ void MedicineCar_Init(void);
 void MedicineCar_Step(void);
 void MedicineCar_RequestRun(uint8_t target_room);
 void MedicineCar_SetRecognizedNumber(uint8_t number);
+uint8_t MedicineCar_RunRoute12Test(uint8_t target_room);
 uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room);
 
 #ifdef __cplusplus
