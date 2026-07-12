@@ -2,6 +2,7 @@
 
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
+#include "medicine_car_return.h"
 #include "medicine_car_vision.h"
 
 static uint8_t route_running;
@@ -27,6 +28,19 @@ static void finish_at_home(uint16_t distance, int pwm)
     zhao_bai(distance, pwm);
     Load(0, 0);
     MedicineCar_SetGreenLed(1U);
+}
+
+static void deliver_branch(uint8_t direction, uint16_t return_distance, int pwm)
+{
+    Return_Push(direction);
+    if (direction == RETURN_DIR_LEFT) {
+        sensor_turn_left();
+    } else {
+        sensor_turn_right();
+    }
+    xunxian_until_door(MED_CAR_DISTANCE_MID, pwm);
+    wait_delivery_done();
+    Return_Execute(return_distance, pwm);
 }
 
 #if MED_CAR_USE_SENSOR_GUIDED_TURNS
@@ -307,6 +321,34 @@ static void fahui(void)
     run3_8();
 }
 
+static void deliver_branch_logged(const char *stage, int num_val, int x_val,
+                                   uint16_t return_distance, int pwm)
+{
+    uint8_t dir = (x_val == 1) ? RETURN_DIR_LEFT : RETURN_DIR_RIGHT;
+
+    u2_printf("[%s] match room=%d dir=%s, push + deliver + return\r\n",
+              stage, num_val, (dir == RETURN_DIR_LEFT) ? "LEFT" : "RIGHT");
+    deliver_branch(dir, return_distance, pwm);
+}
+
+static uint8_t deliver_if_matched_return(const char *stage,
+                                          uint16_t return_distance, int pwm)
+{
+    if (aim == NumBuff[0]) {
+        deliver_branch_logged(stage, NumBuff[0], XBuff[0], return_distance, pwm);
+        return 1U;
+    }
+
+    if (aim == NumBuff[1]) {
+        deliver_branch_logged(stage, NumBuff[1], XBuff[1], return_distance, pwm);
+        return 1U;
+    }
+
+    Return_Push(RETURN_DIR_STRAIGHT);
+    u2_printf("[%s] no match, pushed STRAIGHT\r\n", stage);
+    return 0U;
+}
+
 uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
 {
     uint8_t recog_ok;
@@ -317,106 +359,90 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
         return 0U;
     }
 
+    Return_Init();
     aim = (int)target_room;
     Run_Flag = 0;
     route_running = 1U;
 
-    u2_printf("\r\n=== ROUTE3_8 TEST START target=%u ===\r\n",
-              target_room);
+    u2_printf("\r\n=== ROUTE3_8 TEST START target=%u ===\r\n", target_room);
 
-    u2_printf("[RP1] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_SECOND_CHECK,
-              MED_CAR_R3_8_PWM_FAHUI);
+    u2_printf("[RP1] xunxian to cross1 (no digit), dist=%u pwm=%d\r\n",
+              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
+    Return_Push(RETURN_DIR_STRAIGHT);
+    u2_printf("[RP1] cross1 passed, pushed STRAIGHT\r\n");
+
     recog_ok = shibie_34();
     route3_8_print_buffers("RP1", recog_ok);
-    if (deliver_if_matched_logged("RP1",
-                                  MED_CAR_DISTANCE_MID,
-                                  MED_CAR_DISTANCE_SECOND_CHECK,
+    if (deliver_if_matched_return("RP1",
+                                  MED_CAR_DISTANCE_FIRST_CHECK,
                                   MED_CAR_R3_8_PWM_FAHUI) != 0U) {
-        u2_printf("=== ROUTE3_8 OK target=%u stage=RP1 ===\r\n",
-                  target_room);
+        u2_printf("=== ROUTE3_8 OK target=%u stage=RP1 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
-    u2_printf("[RP2] vision before short segment\r\n");
+    u2_printf("[RP2] zhao_bai dist=%u pwm=%d\r\n",
+              MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
+    zhao_bai(MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
     recog_ok = shibie();
     route3_8_print_buffers("RP2", recog_ok);
-    u2_printf("[RP2] zhao_bai dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_ZHAO_BAI,
-              MED_CAR_R3_8_PWM_MAIN);
-    zhao_bai(MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
     u2_printf("[RP2] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_SHORT,
-              MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
-    if (deliver_if_matched_logged("RP2",
-                                  MED_CAR_DISTANCE_RETURN_CROSS3,
-                                  MED_CAR_DISTANCE_THIRD_CHECK,
+    if (deliver_if_matched_return("RP2",
+                                  MED_CAR_DISTANCE_FIRST_CHECK,
                                   MED_CAR_R3_8_PWM_MAIN) != 0U) {
-        u2_printf("=== ROUTE3_8 OK target=%u stage=RP2 ===\r\n",
-                  target_room);
+        u2_printf("=== ROUTE3_8 OK target=%u stage=RP2 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP3] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_SECOND_CHECK,
-              MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
     recog_ok = shibie_1();
     route3_8_print_buffers("RP3", recog_ok);
-    if (deliver_if_matched_logged("RP3",
-                                  MED_CAR_DISTANCE_MID,
-                                  MED_CAR_DISTANCE_SECOND_CHECK,
+    if (deliver_if_matched_return("RP3",
+                                  MED_CAR_DISTANCE_FIRST_CHECK,
                                   MED_CAR_R3_8_PWM_MAIN) != 0U) {
-        u2_printf("=== ROUTE3_8 OK target=%u stage=RP3 ===\r\n",
-                  target_room);
+        u2_printf("=== ROUTE3_8 OK target=%u stage=RP3 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP4] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_APPROACH,
-              MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
     recog_ok = shibie();
     route3_8_print_buffers("RP4", recog_ok);
     u2_printf("[RP4] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_SHORT,
-              MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
-    if (deliver_if_matched_logged("RP4",
-                                  MED_CAR_DISTANCE_RETURN_CROSS3,
-                                  MED_CAR_DISTANCE_THIRD_CHECK,
+    if (deliver_if_matched_return("RP4",
+                                  MED_CAR_DISTANCE_FIRST_CHECK,
                                   MED_CAR_R3_8_PWM_MAIN) != 0U) {
-        u2_printf("=== ROUTE3_8 OK target=%u stage=RP4 ===\r\n",
-                  target_room);
+        u2_printf("=== ROUTE3_8 OK target=%u stage=RP4 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP5] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_THIRD_CHECK,
-              MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
     recog_ok = shibie_1();
     route3_8_print_buffers("RP5", recog_ok);
-    if (deliver_if_matched_logged("RP5",
-                                  MED_CAR_DISTANCE_RETURN_CROSS4,
-                                  MED_CAR_DISTANCE_THIRD_CHECK,
+    if (deliver_if_matched_return("RP5",
+                                  MED_CAR_DISTANCE_FIRST_CHECK,
                                   MED_CAR_R3_8_PWM_MAIN) != 0U) {
-        u2_printf("=== ROUTE3_8 OK target=%u stage=RP5 ===\r\n",
-                  target_room);
+        u2_printf("=== ROUTE3_8 OK target=%u stage=RP5 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     Load(0, 0);
     MedicineCar_SetRedLed(1U);
-    u2_printf("=== ROUTE3_8 FAIL no target matched target=%u ===\r\n",
-              target_room);
+    u2_printf("=== ROUTE3_8 FAIL no target matched target=%u ===\r\n", target_room);
     route_running = 0U;
     return 0U;
 }
