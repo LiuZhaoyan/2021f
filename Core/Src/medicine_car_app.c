@@ -1,5 +1,7 @@
 #include "medicine_car_app.h"
 
+#include <stddef.h>
+
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
 #include "medicine_car_return.h"
@@ -243,41 +245,6 @@ static uint8_t deliver_if_matched(uint16_t return_cross_distance,
         return 1U;
     }
 
-    return 0U;
-}
-
-static uint8_t deliver_if_matched_logged(const char *stage,
-                                         uint16_t return_cross_distance,
-                                         uint16_t home_distance,
-                                         int pwm)
-{
-    if (aim == NumBuff[0]) {
-        if (XBuff[0] == 1) {
-            u2_printf("[%s] match idx=0 room=%d dir=LEFT\r\n",
-                      stage, NumBuff[0]);
-            deliver_left(return_cross_distance, home_distance, pwm);
-        } else {
-            u2_printf("[%s] match idx=0 room=%d dir=RIGHT\r\n",
-                      stage, NumBuff[0]);
-            deliver_right(return_cross_distance, home_distance, pwm);
-        }
-        return 1U;
-    }
-
-    if (aim == NumBuff[1]) {
-        if (XBuff[1] == 1) {
-            u2_printf("[%s] match idx=1 room=%d dir=LEFT\r\n",
-                      stage, NumBuff[1]);
-            deliver_left(return_cross_distance, home_distance, pwm);
-        } else {
-            u2_printf("[%s] match idx=1 room=%d dir=RIGHT\r\n",
-                      stage, NumBuff[1]);
-            deliver_right(return_cross_distance, home_distance, pwm);
-        }
-        return 1U;
-    }
-
-    u2_printf("[%s] no match target=%d\r\n", stage, aim);
     return 0U;
 }
 
