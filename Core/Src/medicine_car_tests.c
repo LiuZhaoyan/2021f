@@ -2,9 +2,9 @@
 
 #include <stdint.h>
 
-#include "medicine_car_app.h"
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
+#include "medicine_car_return.h"
 #include "medicine_car_vision.h"
 
 static int abs_int(int value)
@@ -134,57 +134,92 @@ static void debug_led_beep_test_loop(void)
     }
 }
 
-static void debug_route_test_loop(uint8_t target_room)
+static void debug_route_test_loop(void)
 {
-    u2_printf("\r\nRoute %u test start\r\n", target_room);
-    MedicineCar_SetRecognizedNumber(0U);
-    u2_printf("Waiting for drug load, raw=%s interpreted=%s\r\n",
-              (MedicineCar_ReadDrugSensorRaw() != 0U) ? "HIGH" : "LOW",
-              (MedicineCar_ReadDrugPresent() != 0U) ? "PRESENT" : "ABSENT");
+    uint8_t target = 0U;
 
-    while (MedicineCar_ReadDrugPresent() == 0U) {
-        MedicineCarPlatform_Service();
-        delay_ms(100U);
-    }
+    Return_Init();
+    N = 0;
+    Load(0, 0);
+    MedicineCar_SetGreenLed(0U);
 
-    u2_printf("Drug loaded, requesting vision target=%u\r\n", target_room);
+    u2_printf("\r\n=== ROUTE 1/2 TEST (return module) ===\r\n");
 
-    while (N != (int)target_room) {
+    u2_printf("[Phase 1] waiting for vision (room 1 or 2)...\r\n");
+    while (target == 0U) {
         MedicineCarVisionResult result;
 
         if (MedicineCarVision_Request(&result,
                                       MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
-            uint8_t index;
+            uint8_t i;
 
-            u2_printf("VISION OK count=%u digits=", result.count);
-            for (index = 0U; index < result.count; index++) {
-                u2_printf("%u", result.digits[index]);
-                if (result.digits[index] == target_room) {
-                    MedicineCar_SetRecognizedNumber(result.digits[index]);
-                }
-                if (index != (uint8_t)(result.count - 1U)) {
-                    u2_printf(",");
+            u2_printf("[Phase 1] vision digits:");
+            for (i = 0U; i < result.count; i++) {
+                u2_printf(" %u", result.digits[i]);
+                if ((result.digits[i] == 1U) || (result.digits[i] == 2U)) {
+                    target = result.digits[i];
                 }
             }
             u2_printf("\r\n");
         } else {
-            u2_printf("VISION ERR %s raw='%s'\r\n",
-                      MedicineCarVision_LastStatusText(),
-                      MedicineCarVision_LastLine());
+            u2_printf("[Phase 1] vision err: %s\r\n",
+                      MedicineCarVision_LastStatusText());
         }
 
-        if (N != (int)target_room) {
-            u2_printf("Waiting for target %u recognition...\r\n", target_room);
+        if (target == 0U) {
+            MedicineCarPlatform_Service();
+            delay_ms(MED_CAR_TEST_VISION_PRINT_MS);
         }
+    }
+    u2_printf("[Phase 1] done: target = %u\r\n", target);
 
+    u2_printf("[Phase 2] waiting for drug load...\r\n");
+    while (MedicineCar_ReadDrugPresent() == 0U) {
         MedicineCarPlatform_Service();
-        delay_ms(MED_CAR_TEST_VISION_PRINT_MS);
+        delay_ms(100U);
+    }
+    u2_printf("[Phase 2] done: drug loaded\r\n");
+
+    u2_printf("[Phase 3] xunxian to intersection, distance=%u\r\n",
+              MED_CAR_DISTANCE_FIRST_CHECK);
+    xunxian(MED_CAR_DISTANCE_FIRST_CHECK, 4000);
+
+    if (target == 1U) {
+        u2_printf("[Phase 3] push LEFT, turn into left branch\r\n");
+        Return_Push(RETURN_DIR_LEFT);
+        sensor_turn_left();
+    } else {
+        u2_printf("[Phase 3] push RIGHT, turn into right branch\r\n");
+        Return_Push(RETURN_DIR_RIGHT);
+        sensor_turn_right();
     }
 
-    u2_printf("Vision recognized target N=%d, starting route\r\n", N);
-    MedicineCar_Step();
+    u2_printf("[Phase 4] xunxian to door, max=%u\r\n",
+              MED_CAR_DISTANCE_MID);
+    xunxian_until_door(MED_CAR_DISTANCE_MID, 4000);
+
+    u2_printf("[Phase 5] waiting for drug removal...\r\n");
+    {
+        uint32_t waited = 0U;
+
+        MedicineCar_SetRedLed(1U);
+        Load(0, 0);
+        while ((MedicineCar_ReadDrugPresent() != 0U) &&
+               (waited < MED_CAR_DELIVERY_WAIT_TIMEOUT_MS)) {
+            Load(0, 0);
+            delay_ms(20U);
+            waited += 20U;
+        }
+        MedicineCar_SetRedLed(0U);
+    }
+    u2_printf("[Phase 5] done: drug removed\r\n");
+
+    u2_printf("[Phase 6] Return_Execute: diaotou + reverse stack + head home\r\n");
+    Return_Execute(MED_CAR_DISTANCE_FIRST_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
+
+    u2_printf("=== TEST COMPLETE: returned to start ===\r\n");
+    MedicineCar_SetGreenLed(1U);
     Load(0, 0);
-    u2_printf("Route %u test done, idle now\r\n", target_room);
 
     while (1) {
         MedicineCarPlatform_Service();
@@ -640,9 +675,9 @@ void MedicineCar_RunFirmwareTestLoop(void)
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_LED_BEEP
     debug_led_beep_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE1
-    debug_route_test_loop(1U);
+    debug_route_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE2
-    debug_route_test_loop(2U);
+    debug_route_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ENCODER
     debug_encoder_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_WHEEL_MATCH

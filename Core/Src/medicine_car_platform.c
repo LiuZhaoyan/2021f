@@ -6,6 +6,7 @@
 
 #include "gpio.h"
 #include "medicine_car_config.h"
+#include "medicine_car_detect.h"
 #include "tim.h"
 #include "usart.h"
 
@@ -35,8 +36,7 @@ static uint8_t gray_sensor_values[8] = {
 static uint16_t last_left_encoder_count;
 static uint16_t last_right_encoder_count;
 
-static void move_forward_straight(uint16_t distance_ticks, int pwm);
-static void move_forward_timed(uint32_t duration_ms, int pwm);
+void move_forward_timed(uint32_t duration_ms, int pwm);
 static int abs_int_local(int value);
 
 static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
@@ -508,73 +508,6 @@ void zhao_bai(uint16_t roadsum, int pwm)
     xunxian(roadsum, pwm);
 }
 
-uint8_t is_at_cross(void)
-{
-    uint8_t gray[8];
-
-    MedicineCar_ReadLineSensors(gray);
-    if ((gray[1] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
-        return 1U;
-    }
-    return 0U;
-}
-
-uint8_t is_wide_black(uint8_t threshold)
-{
-    uint8_t gray[8];
-    uint8_t channel;
-    uint8_t count = 0U;
-
-    MedicineCar_ReadLineSensors(gray);
-    for (channel = 0U; channel < 8U; channel++) {
-        if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
-            count++;
-        }
-    }
-    return (count >= threshold) ? 1U : 0U;
-}
-
-uint8_t is_line_left(void)
-{
-    uint8_t gray[8];
-
-    MedicineCar_ReadLineSensors(gray);
-    if ((gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[1] == MED_CAR_GRAY_BLACK_LEVEL)) {
-        return 1U;
-    }
-    return 0U;
-}
-
-uint8_t is_line_right(void)
-{
-    uint8_t gray[8];
-
-    MedicineCar_ReadLineSensors(gray);
-    if ((gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
-        return 1U;
-    }
-    return 0U;
-}
-
-uint8_t is_line_center(void)
-{
-    uint8_t gray[8];
-
-    MedicineCar_ReadLineSensors(gray);
-    if ((gray[2] == MED_CAR_GRAY_BLACK_LEVEL) ||
-        (gray[3] == MED_CAR_GRAY_BLACK_LEVEL) ||
-        (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) ||
-        (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
-        return 1U;
-    }
-    return 0U;
-}
-
 static uint8_t search_line_rotating_with_min_ticks(int left_pwm,
                                                    int right_pwm,
                                                    uint16_t min_turn_ticks,
@@ -762,36 +695,12 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
     return 0U;
 }
 
-static void move_forward_timed(uint32_t duration_ms, int pwm)
+void move_forward_timed(uint32_t duration_ms, int pwm)
 {
     MedicineCar_ResetEncoders();
     Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
          trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
     HAL_Delay(duration_ms);
-    stop(1);
-}
-
-static void move_forward_straight(uint16_t distance_ticks, int pwm)
-{
-    uint32_t guard = 0U;
-    uint16_t guard_max;
-
-    guard_max = (uint16_t)((uint32_t)distance_ticks * 3U / 2U);
-    if (guard_max < 200U) {
-        guard_max = 200U;
-    }
-
-    MedicineCar_ResetEncoders();
-
-    while (((Encoder_Left + Encoder_Right) < (int)distance_ticks)
-           && (guard < (uint32_t)guard_max)) {
-        Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
-             trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
-        HAL_Delay(10U);
-        Read_Speed();
-        guard++;
-    }
-
     stop(1);
 }
 

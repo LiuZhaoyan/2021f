@@ -47,12 +47,6 @@ void diaotou(void);
 uint8_t xunxian(uint16_t roadsum, int pwm);
 void zhao_bai(uint16_t roadsum, int pwm);
 int getnum(void);
-
-uint8_t is_at_cross(void);
-uint8_t is_wide_black(uint8_t threshold);
-uint8_t is_line_left(void);
-uint8_t is_line_right(void);
-uint8_t is_line_center(void);
 uint8_t search_line_rotating(int left_pwm, int right_pwm,
                              uint16_t min_delay_ms, uint16_t timeout_ms,
                              uint8_t (*aligned_fn)(void));
@@ -60,6 +54,7 @@ uint8_t sensor_turn_left(void);
 uint8_t sensor_turn_right(void);
 uint8_t sensor_diaotou(void);
 uint8_t xunxian_until_door(uint16_t max_distance, int pwm);
+void move_forward_timed(uint32_t duration_ms, int pwm);
 
 void u2_printf(const char *fmt, ...);
 void u3_printf(const char *fmt, ...);
