@@ -36,6 +36,8 @@ static uint16_t last_left_encoder_count;
 static uint16_t last_right_encoder_count;
 
 static void move_forward_straight(uint16_t distance_ticks, int pwm);
+static void move_forward_timed(uint32_t duration_ms, int pwm);
+static int abs_int_local(int value);
 
 static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
 {
@@ -45,6 +47,11 @@ static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
 static void write_pin(GPIO_TypeDef *port, uint16_t pin, uint8_t on)
 {
     HAL_GPIO_WritePin(port, pin, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+static int abs_int_local(int value)
+{
+    return (value < 0) ? -value : value;
 }
 
 static void gray_clock_high_delay(void)
@@ -434,8 +441,8 @@ uint8_t xunxian(uint16_t roadsum, int pwm)
 
         if ((gray[1] == MED_CAR_GRAY_BLACK_LEVEL) &&
             (gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
-            (gray[4] == MED_CAR_GRAY_BLACK_LEVEL) &&
-            (gray[5] == MED_CAR_GRAY_BLACK_LEVEL)) {
+            (gray[5] == MED_CAR_GRAY_BLACK_LEVEL) &&
+            (gray[6] == MED_CAR_GRAY_BLACK_LEVEL)) {
             stop(1);
             return 1U;
         }
@@ -536,7 +543,7 @@ uint8_t is_line_left(void)
 
     MedicineCar_ReadLineSensors(gray);
     if ((gray[2] == MED_CAR_GRAY_BLACK_LEVEL) &&
-        (gray[3] == MED_CAR_GRAY_BLACK_LEVEL)) {
+        (gray[1] == MED_CAR_GRAY_BLACK_LEVEL)) {
         return 1U;
     }
     return 0U;
@@ -568,21 +575,43 @@ uint8_t is_line_center(void)
     return 0U;
 }
 
-uint8_t search_line_rotating(int left_pwm, int right_pwm,
-                             uint16_t min_delay_ms, uint16_t timeout_ms,
-                             uint8_t (*aligned_fn)(void))
+static uint8_t search_line_rotating_with_min_ticks(int left_pwm,
+                                                   int right_pwm,
+                                                   uint16_t min_turn_ticks,
+                                                   uint16_t min_delay_ms,
+                                                   uint16_t timeout_ms,
+                                                   uint8_t (*aligned_fn)(void))
 {
     uint32_t elapsed;
+    uint8_t aligned_confirm = 0U;
+    uint8_t min_angle_reached = 0U;
 
+    MedicineCar_ResetEncoders();
     Load(left_pwm, right_pwm);
     HAL_Delay(min_delay_ms);
     elapsed = (uint32_t)min_delay_ms;
 
     while (elapsed < (uint32_t)timeout_ms) {
-        if (aligned_fn() != 0U) {
-            stop(1);
-            return 1U;
+        Read_Speed();
+
+        if (min_angle_reached == 0U) {
+            if ((uint32_t)(abs_int_local(Encoder_Left) +
+                           abs_int_local(Encoder_Right)) >=
+                (uint32_t)min_turn_ticks) {
+                min_angle_reached = 1U;
+            }
+        } else {
+            if (aligned_fn() != 0U) {
+                aligned_confirm++;
+                if (aligned_confirm >= MED_CAR_SENSOR_TURN_CONFIRM_CNT) {
+                    stop(1);
+                    return 1U;
+                }
+            } else {
+                aligned_confirm = 0U;
+            }
         }
+
         HAL_Delay(MED_CAR_TURN_POLL_MS);
         elapsed += (uint32_t)MED_CAR_TURN_POLL_MS;
     }
@@ -591,36 +620,50 @@ uint8_t search_line_rotating(int left_pwm, int right_pwm,
     return 0U;
 }
 
+uint8_t search_line_rotating(int left_pwm, int right_pwm,
+                             uint16_t min_delay_ms, uint16_t timeout_ms,
+                             uint8_t (*aligned_fn)(void))
+{
+    return search_line_rotating_with_min_ticks(left_pwm,
+                                               right_pwm,
+                                               MED_CAR_SENSOR_TURN_LEFT_MIN_TICKS,
+                                               min_delay_ms,
+                                               timeout_ms,
+                                               aligned_fn);
+}
+
 uint8_t sensor_turn_left(void)
 {
-    move_forward_straight(MED_CAR_CROSS_ADVANCE_TICKS,
-                          MED_CAR_CROSS_ADVANCE_PWM);
-    return search_line_rotating(MED_CAR_TURN_LEFT_LEFT_PWM,
-                                MED_CAR_TURN_LEFT_RIGHT_PWM,
-                                MED_CAR_TURN_MIN_MS,
-                                MED_CAR_TURN_TIMEOUT_MS,
-                                is_line_left);
+    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
+                       MED_CAR_CROSS_ADVANCE_PWM);
+    return search_line_rotating_with_min_ticks(MED_CAR_TURN_LEFT_LEFT_PWM,
+                                               MED_CAR_TURN_LEFT_RIGHT_PWM,
+                                               MED_CAR_SENSOR_TURN_LEFT_MIN_TICKS,
+                                               MED_CAR_TURN_MIN_MS,
+                                               MED_CAR_TURN_TIMEOUT_MS,
+                                               is_line_left);
 }
 
 uint8_t sensor_turn_right(void)
 {
-    move_forward_straight(MED_CAR_CROSS_ADVANCE_TICKS,
-                          MED_CAR_CROSS_ADVANCE_PWM);
-    return search_line_rotating(MED_CAR_TURN_RIGHT_LEFT_PWM,
-                                MED_CAR_TURN_RIGHT_RIGHT_PWM,
-                                MED_CAR_TURN_MIN_MS,
-                                MED_CAR_TURN_TIMEOUT_MS,
-                                is_line_right);
+    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
+                       MED_CAR_CROSS_ADVANCE_PWM);
+    return search_line_rotating_with_min_ticks(MED_CAR_TURN_RIGHT_LEFT_PWM,
+                                               MED_CAR_TURN_RIGHT_RIGHT_PWM,
+                                               MED_CAR_SENSOR_TURN_RIGHT_MIN_TICKS,
+                                               MED_CAR_TURN_MIN_MS,
+                                               MED_CAR_TURN_TIMEOUT_MS,
+                                               is_line_right);
 }
 
 uint8_t sensor_diaotou(void)
 {
-
-    return search_line_rotating(MED_CAR_DIAOTOU_LEFT_PWM,
-                                MED_CAR_DIAOTOU_RIGHT_PWM,
-                                MED_CAR_DIAOTOU_MIN_MS,
-                                MED_CAR_DIAOTOU_TIMEOUT_MS,
-                                is_line_center);
+    return search_line_rotating_with_min_ticks(MED_CAR_DIAOTOU_LEFT_PWM,
+                                               MED_CAR_DIAOTOU_RIGHT_PWM,
+                                               MED_CAR_SENSOR_DIAOTOU_MIN_TICKS,
+                                               MED_CAR_DIAOTOU_MIN_MS,
+                                               MED_CAR_DIAOTOU_TIMEOUT_MS,
+                                               is_line_center);
 }
 
 uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
@@ -717,6 +760,15 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
 
     stop(1);
     return 0U;
+}
+
+static void move_forward_timed(uint32_t duration_ms, int pwm)
+{
+    MedicineCar_ResetEncoders();
+    Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
+         trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
+    HAL_Delay(duration_ms);
+    stop(1);
 }
 
 static void move_forward_straight(uint16_t distance_ticks, int pwm)

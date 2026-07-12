@@ -430,6 +430,85 @@ static void debug_drug_sensor_test_loop(void)
     }
 }
 
+static void debug_cross_turn_once(uint32_t cycle,
+                                  const char *turn_name,
+                                  uint8_t (*turn_fn)(void))
+{
+    uint8_t cross_found;
+    uint8_t turn_result;
+    uint32_t left_abs;
+    uint32_t right_abs;
+    uint32_t total_abs_ticks;
+    uint32_t wheel_gap;
+
+    Load(0, 0);
+    u2_printf("Cycle %lu %s: put the car on the line before a cross, start in 3s.\r\n",
+              (unsigned long)cycle,
+              turn_name);
+    delay_ms(3000U);
+
+    cross_found = xunxian(MED_CAR_TEST_CROSS_TURN_MAX_TICKS,
+                          MED_CAR_TEST_CROSS_TURN_PWM);
+    Read_Speed();
+    Load(0, 0);
+
+    left_abs = (uint32_t)abs_int(Encoder_Left);
+    right_abs = (uint32_t)abs_int(Encoder_Right);
+    total_abs_ticks = left_abs + right_abs;
+    wheel_gap = (left_abs > right_abs) ? (left_abs - right_abs) : (right_abs - left_abs);
+
+    u2_printf("Cycle %lu %s approach %s: L=%d R=%d sum=%d total_abs=%lu gap=%lu\r\n",
+              (unsigned long)cycle,
+              turn_name,
+              (cross_found != 0U) ? "CROSS" : "LIMIT",
+              Encoder_Left,
+              Encoder_Right,
+              Encoder_Left + Encoder_Right,
+              (unsigned long)total_abs_ticks,
+              (unsigned long)wheel_gap);
+
+    if (cross_found == 0U) {
+        u2_printf("Cycle %lu %s skip turn: cross not found before max ticks.\r\n",
+                  (unsigned long)cycle,
+                  turn_name);
+        return;
+    }
+
+    u2_printf("Cycle %lu turn %s...\r\n",
+              (unsigned long)cycle,
+              turn_name);
+    turn_result = turn_fn();
+    u2_printf("Cycle %lu turn %s result: %s\r\n",
+              (unsigned long)cycle,
+              turn_name,
+              (turn_result != 0U) ? "OK" : "TIMEOUT");
+}
+
+static void debug_cross_turn_test_loop(void)
+{
+    uint32_t cycle;
+
+    u2_printf("\r\nCross turn test start\r\n");
+    u2_printf("Line follow to cross, stop, then turn left/right.\r\n");
+    u2_printf("PWM=%d, cycles=%u, max approach ticks=%u\r\n",
+              MED_CAR_TEST_CROSS_TURN_PWM,
+              MED_CAR_TEST_CROSS_TURN_CYCLES,
+              MED_CAR_TEST_CROSS_TURN_MAX_TICKS);
+
+    while (1) {
+        for (cycle = 1U; cycle <= MED_CAR_TEST_CROSS_TURN_CYCLES; cycle++) {
+            debug_cross_turn_once(cycle, "LEFT", sensor_turn_left);
+            delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+
+            debug_cross_turn_once(cycle, "RIGHT", sensor_turn_right);
+            delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+        }
+
+        u2_printf("Cross turn round complete. Next round starts after pause.\r\n");
+        delay_ms(MED_CAR_TEST_CROSS_TURN_PAUSE_MS);
+    }
+}
+
 static void debug_sensor_turns_test_loop(void)
 {
     u2_printf("\r\nSensor turns test start\r\n");
@@ -512,6 +591,8 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_sensor_turns_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_SENSOR_DOOR
     debug_sensor_door_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_CROSS_TURN
+    debug_cross_turn_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE3_8
     debug_route3_8_test_loop();
 #else
