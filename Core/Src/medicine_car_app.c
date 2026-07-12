@@ -367,8 +367,8 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
     u2_printf("\r\n=== ROUTE3_8 TEST START target=%u ===\r\n", target_room);
 
     u2_printf("[RP1] xunxian to cross1 (no digit), dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
-    xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
+              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
     Return_Push(RETURN_DIR_STRAIGHT);
     u2_printf("[RP1] cross1 passed, pushed STRAIGHT\r\n");
 
@@ -376,65 +376,65 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
     route3_8_print_buffers("RP1", recog_ok);
     if (deliver_if_matched_return("RP1",
                                   MED_CAR_DISTANCE_FIRST_CHECK,
-                                  MED_CAR_R3_8_PWM_FAHUI) != 0U) {
+                                  MED_CAR_TEST_GRAY_TRACE_PWM) != 0U) {
         u2_printf("=== ROUTE3_8 OK target=%u stage=RP1 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP2] zhao_bai dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
-    zhao_bai(MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_TEST_GRAY_TRACE_PWM);
+    zhao_bai(MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_TEST_GRAY_TRACE_PWM);
     recog_ok = shibie();
     route3_8_print_buffers("RP2", recog_ok);
     u2_printf("[RP2] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
-    xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_TEST_GRAY_TRACE_PWM);
     if (deliver_if_matched_return("RP2",
                                   MED_CAR_DISTANCE_FIRST_CHECK,
-                                  MED_CAR_R3_8_PWM_MAIN) != 0U) {
+                                  MED_CAR_TEST_GRAY_TRACE_PWM) != 0U) {
         u2_printf("=== ROUTE3_8 OK target=%u stage=RP2 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP3] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
-    xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
     recog_ok = shibie_1();
     route3_8_print_buffers("RP3", recog_ok);
     if (deliver_if_matched_return("RP3",
                                   MED_CAR_DISTANCE_FIRST_CHECK,
-                                  MED_CAR_R3_8_PWM_MAIN) != 0U) {
+                                  MED_CAR_TEST_GRAY_TRACE_PWM) != 0U) {
         u2_printf("=== ROUTE3_8 OK target=%u stage=RP3 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP4] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
-    xunxian(MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_TEST_GRAY_TRACE_PWM);
     recog_ok = shibie();
     route3_8_print_buffers("RP4", recog_ok);
     u2_printf("[RP4] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
-    xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_TEST_GRAY_TRACE_PWM);
     if (deliver_if_matched_return("RP4",
                                   MED_CAR_DISTANCE_FIRST_CHECK,
-                                  MED_CAR_R3_8_PWM_MAIN) != 0U) {
+                                  MED_CAR_TEST_GRAY_TRACE_PWM) != 0U) {
         u2_printf("=== ROUTE3_8 OK target=%u stage=RP4 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
     }
 
     u2_printf("[RP5] xunxian dist=%u pwm=%d\r\n",
-              MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
-    xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
+              MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
+    xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_TEST_GRAY_TRACE_PWM);
     recog_ok = shibie_1();
     route3_8_print_buffers("RP5", recog_ok);
     if (deliver_if_matched_return("RP5",
                                   MED_CAR_DISTANCE_FIRST_CHECK,
-                                  MED_CAR_R3_8_PWM_MAIN) != 0U) {
+                                  MED_CAR_TEST_GRAY_TRACE_PWM) != 0U) {
         u2_printf("=== ROUTE3_8 OK target=%u stage=RP5 ===\r\n", target_room);
         route_running = 0U;
         return 1U;
