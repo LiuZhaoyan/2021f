@@ -69,6 +69,7 @@ void Return_Execute(uint16_t home_distance, int pwm)
     uint8_t retry;
 
     sensor_diaotou();
+    move_forward_timed(MED_CAR_RETURN_ESCAPE_MS, pwm);
 
     while (!Return_IsEmpty()) {
         uint8_t dir = return_pop();
