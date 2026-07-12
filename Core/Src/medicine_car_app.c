@@ -5,7 +5,7 @@
 #include "medicine_car_config.h"
 #include "medicine_car_platform.h"
 #include "medicine_car_return.h"
-#include "medicine_car_vision.h"
+#include "medicine_car_vision_ring.h"
 
 static uint8_t route_running;
 
@@ -144,26 +144,34 @@ static uint8_t request_recognition_pair(uint8_t reverse_positions)
 
     clear_recognition_buffers();
     for (attempt = 0U; attempt < MED_CAR_VISION_RETRY_COUNT; attempt++) {
-        MedicineCarVisionResult result;
+        VisionRingEntry entry;
 
-        if (MedicineCarVision_Request(&result,
-                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
-            uint8_t index;
-            uint8_t usable_count = result.count;
-
-            if (usable_count > 2U) {
-                usable_count = 2U;
+        if (VisionRing_ReadNext(&entry) == 0U) {
+            if (VisionRing_WaitForNewEntry(
+                    MED_CAR_VISION_UART_TIMEOUT_MS) == 0U) {
+                continue;
             }
-
-            for (index = 0U; index < usable_count; index++) {
-                NumBuff[index] = (int)result.digits[index];
-                if (reverse_positions != 0U) {
-                    XBuff[index] = (index == 0U) ? 2 : 1;
-                } else {
-                    XBuff[index] = (int)(index + 1U);
-                }
+            if (VisionRing_ReadNext(&entry) == 0U) {
+                continue;
             }
-            return (usable_count > 0U) ? 1U : 0U;
+        }
+
+        if (entry.left != 0U) {
+            NumBuff[0] = (int)entry.left;
+            XBuff[0] = (reverse_positions != 0U) ? 2 : 1;
+        }
+        if (entry.right != 0U) {
+            if (entry.left != 0U) {
+                NumBuff[1] = (int)entry.right;
+                XBuff[1] = (reverse_positions != 0U) ? 1 : 2;
+            } else {
+                NumBuff[0] = (int)entry.right;
+                XBuff[0] = (reverse_positions != 0U) ? 1 : 2;
+            }
+        }
+
+        if ((entry.left != 0U) || (entry.right != 0U)) {
+            return 1U;
         }
     }
 
@@ -280,6 +288,7 @@ static void fahui(void)
 {
     uint8_t recognize_attempts = 0U;
 
+    VisionRing_Flush();
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
 
     do {
@@ -321,6 +330,7 @@ static uint8_t route_run(const RouteSegment *segments,
     uint8_t door_mode = 0U;
 
     Return_Init();
+    VisionRing_Flush();
 
     for (i = 0; segments[i].type != SEG_END; i++) {
         const RouteSegment *seg = &segments[i];
@@ -438,6 +448,7 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
 void MedicineCar_Init(void)
 {
     MedicineCarPlatform_Init();
+    VisionRing_Init();
     route_running = 0U;
     Run_Flag = 0;
     aim = 0;
