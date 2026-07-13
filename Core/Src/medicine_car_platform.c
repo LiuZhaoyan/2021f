@@ -838,6 +838,27 @@ void move_forward_timed(uint32_t duration_ms, int pwm)
     stop(1);
 }
 
+void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks)
+{
+    uint32_t elapsed = 0U;
+
+    MedicineCar_ResetEncoders();
+    Load(left_pwm, right_pwm);
+
+    while (elapsed < (uint32_t)MED_CAR_RP2_WIGGLE_TIMEOUT_MS) {
+        Read_Speed();
+        if ((uint32_t)(abs_int_local(Encoder_Left) +
+                       abs_int_local(Encoder_Right)) >=
+            (uint32_t)target_ticks) {
+            break;
+        }
+        HAL_Delay(MED_CAR_TURN_POLL_MS);
+        elapsed += (uint32_t)MED_CAR_TURN_POLL_MS;
+    }
+
+    stop(1);
+}
+
 int getnum(void)
 {
     return N;

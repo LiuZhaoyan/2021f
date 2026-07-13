@@ -56,6 +56,7 @@ uint8_t sensor_diaotou(void);
 uint8_t xunxian_until_door(uint16_t max_distance, int pwm);
 uint8_t xunxian_until_fork(uint16_t max_distance, int pwm);
 void move_forward_timed(uint32_t duration_ms, int pwm);
+void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks);
 
 void u2_printf(const char *fmt, ...);
 void u3_printf(const char *fmt, ...);

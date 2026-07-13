@@ -626,6 +626,65 @@ static void debug_sensor_door_test_loop(void)
     }
 }
 
+static void debug_wiggle_calibration_test_loop(void)
+{
+    u2_printf("\r\n=== WIGGLE CALIBRATION TEST ===\r\n");
+    u2_printf("PWM: L=(%d,%d) R=(%d,%d)\r\n",
+              MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+              MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
+              MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+              MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT);
+    u2_printf("Target ticks: %u\r\n",
+              (unsigned int)MED_CAR_RP2_WIGGLE_TICKS);
+    u2_printf("Cycle: L -> print -> R(back) -> print -> pause\r\n");
+    delay_ms(3000U);
+
+    while (1) {
+        int before_L, before_R;
+        int delta_L, delta_R;
+
+        Read_Speed();
+        before_L = Encoder_Left;
+        before_R = Encoder_Right;
+        u2_printf("L: before enc L=%d R=%d\r\n", before_L, before_R);
+
+        wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
+                        MED_CAR_RP2_WIGGLE_TICKS);
+
+        Read_Speed();
+        delta_L = Encoder_Left - before_L;
+        delta_R = Encoder_Right - before_R;
+        u2_printf("L: after enc L=%d R=%d | delta L=%d R=%d sum=%d\r\n",
+                  Encoder_Left, Encoder_Right,
+                  delta_L, delta_R,
+                  (delta_L < 0 ? -delta_L : delta_L) +
+                  (delta_R < 0 ? -delta_R : delta_R));
+
+        Read_Speed();
+        before_L = Encoder_Left;
+        before_R = Encoder_Right;
+        u2_printf("R: before enc L=%d R=%d\r\n", before_L, before_R);
+
+        wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
+                        MED_CAR_RP2_WIGGLE_TICKS);
+
+        Read_Speed();
+        delta_L = Encoder_Left - before_L;
+        delta_R = Encoder_Right - before_R;
+        u2_printf("R: after enc L=%d R=%d | delta L=%d R=%d sum=%d\r\n",
+                  Encoder_Left, Encoder_Right,
+                  delta_L, delta_R,
+                  (delta_L < 0 ? -delta_L : delta_L) +
+                  (delta_R < 0 ? -delta_R : delta_R));
+
+        u2_printf("--- pause %ums ---\r\n",
+                  (unsigned int)MED_CAR_TEST_WIGGLE_PAUSE_MS);
+        delay_ms(MED_CAR_TEST_WIGGLE_PAUSE_MS);
+    }
+}
+
 void MedicineCar_RunFirmwareTestLoop(void)
 {
 #if MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_MOTOR
@@ -654,6 +713,8 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_cross_turn_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_ROUTE3_8
     debug_route3_8_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_WIGGLE_CALIB
+    debug_wiggle_calibration_test_loop();
 #else
     return;
 #endif

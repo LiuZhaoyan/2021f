@@ -138,7 +138,7 @@ static void clear_recognition_buffers(void)
     XBuff[1] = 0;
 }
 
-static uint8_t request_recognition_pair(uint8_t reverse_positions)
+static uint8_t request_recognition_pair(void)
 {
     uint8_t attempt;
 
@@ -158,15 +158,15 @@ static uint8_t request_recognition_pair(uint8_t reverse_positions)
 
         if (entry.left != 0U) {
             NumBuff[0] = (int)entry.left;
-            XBuff[0] = (reverse_positions != 0U) ? 2 : 1;
+            XBuff[0] = 1;
         }
         if (entry.right != 0U) {
             if (entry.left != 0U) {
                 NumBuff[1] = (int)entry.right;
-                XBuff[1] = (reverse_positions != 0U) ? 1 : 2;
+                XBuff[1] = 2;
             } else {
                 NumBuff[0] = (int)entry.right;
-                XBuff[0] = (reverse_positions != 0U) ? 1 : 2;
+                XBuff[0] = 2;
             }
         }
 
@@ -181,17 +181,115 @@ static uint8_t request_recognition_pair(uint8_t reverse_positions)
 
 static uint8_t shibie(void)
 {
-    return request_recognition_pair(0U);
+    return request_recognition_pair();
 }
 
-static uint8_t shibie_1(void)
-{
-    return request_recognition_pair(1U);
-}
+#define FORK_LEFT   1U
+#define FORK_RIGHT  2U
 
-static uint8_t shibie_34(void)
+static uint8_t shibie_rp2(void)
 {
-    return request_recognition_pair(1U);
+    int    nums[4];
+    uint8_t sides[4];
+    uint8_t count = 0U;
+    uint8_t i;
+
+#define ADD_UNIQUE(num, side)                                          \
+    do {                                                               \
+        uint8_t __u;                                                   \
+        uint8_t __found = 0U;                                          \
+        if ((num) == 0) break;                                         \
+        for (__u = 0U; __u < count; __u++) {                           \
+            if (nums[__u] == (int)(num)) { __found = 1U; break; }      \
+        }                                                              \
+        if (!__found && count < MED_CAR_RP2_MAX_COLLECTED) {           \
+            nums[count]  = (int)(num);                                 \
+            sides[count] = (side);                                     \
+            count++;                                                   \
+        }                                                              \
+    } while(0)
+
+#define READ_FRESH_ENTRY(out)                                          \
+    do {                                                               \
+        VisionRing_Flush();                                            \
+        delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);                         \
+        if (VisionRing_WaitForNewEntry(                                \
+                MED_CAR_RP2_SCAN_TIMEOUT_MS)) {                       \
+            (void)VisionRing_ReadNext(&(out));                         \
+        } else {                                                       \
+            (out).left  = 0U;                                          \
+            (out).right = 0U;                                          \
+        }                                                              \
+    } while(0)
+
+    clear_recognition_buffers();
+
+    /* 1. Center: left pixel -> left fork, right pixel -> right fork */
+    {
+        VisionRingEntry entry;
+        READ_FRESH_ENTRY(entry);
+        ADD_UNIQUE(entry.left,  FORK_LEFT);
+        ADD_UNIQUE(entry.right, FORK_RIGHT);
+    }
+
+    /* 2. Wiggle left */
+    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+                    MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
+                    MED_CAR_RP2_WIGGLE_TICKS);
+    {
+        VisionRingEntry entry;
+        READ_FRESH_ENTRY(entry);
+        ADD_UNIQUE(entry.left,  FORK_LEFT);
+        ADD_UNIQUE(entry.right, FORK_LEFT);
+    }
+
+    /* 3. Wiggle right (2x ticks, left -> center -> right) */
+    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+                    MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
+                    (uint16_t)(MED_CAR_RP2_WIGGLE_TICKS * 2U));
+    {
+        VisionRingEntry entry;
+        READ_FRESH_ENTRY(entry);
+        ADD_UNIQUE(entry.left,  FORK_RIGHT);
+        ADD_UNIQUE(entry.right, FORK_RIGHT);
+    }
+
+    /* 4. Return to center */
+    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+                    MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
+                    MED_CAR_RP2_WIGGLE_TICKS);
+
+    /* 5. Populate NumBuff/XBuff — aim-priority strategy */
+    clear_recognition_buffers();
+    for (i = 0U; i < count; i++) {
+        if (nums[i] == aim) {
+            if (sides[i] == FORK_LEFT) {
+                NumBuff[0] = aim;
+                XBuff[0]  = 1;
+            } else {
+                NumBuff[1] = aim;
+                XBuff[1]  = 2;
+            }
+            break;
+        }
+    }
+    for (i = 0U; i < count; i++) {
+        if (nums[i] == aim) {
+            continue;
+        }
+        if (NumBuff[0] == 0) {
+            NumBuff[0] = nums[i];
+            XBuff[0]  = (sides[i] == FORK_LEFT) ? 1 : 2;
+        } else if (NumBuff[1] == 0) {
+            NumBuff[1] = nums[i];
+            XBuff[1]  = (sides[i] == FORK_LEFT) ? 1 : 2;
+        }
+    }
+
+#undef ADD_UNIQUE
+#undef READ_FRESH_ENTRY
+
+    return (count > 0U) ? 1U : 0U;
 }
 
 static const RouteSegment route12_segments[] = {
@@ -202,9 +300,9 @@ static const RouteSegment route12_segments[] = {
 
 static const RouteSegment route38_segments[] = {
     {SEG_CROSS, MED_CAR_DISTANCE_SECOND_CHECK,  NULL,       0},
-    {SEG_FORK,  0,                               shibie_34,  1},
+    {SEG_FORK,  0,                               shibie,     1},
     {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     0},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_1,   1},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_rp2, 1},
     {SEG_DOOR,  MED_CAR_DISTANCE_MID,            NULL,       0},
     {SEG_END,   0,                               NULL,       0},
 };
@@ -259,7 +357,7 @@ static uint8_t deliver_if_matched(uint16_t return_cross_distance,
 static void run3_8(void)
 {
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
-    shibie_1();
+    shibie();
 
     if (deliver_if_matched(MED_CAR_DISTANCE_MID,
                            MED_CAR_DISTANCE_SECOND_CHECK,
@@ -278,7 +376,7 @@ static void run3_8(void)
     }
 
     xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
-    shibie_1();
+    shibie();
     (void)deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS4,
                              MED_CAR_DISTANCE_THIRD_CHECK,
                              MED_CAR_R3_8_PWM_MAIN);
@@ -293,7 +391,7 @@ static void fahui(void)
 
     do {
         recognize_attempts++;
-        if (shibie_34() == 0U) {
+        if (shibie() == 0U) {
             break;
         }
     } while ((NumBuff[0] == NumBuff[1]) &&
