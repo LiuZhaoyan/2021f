@@ -24,6 +24,7 @@ typedef struct {
     uint16_t distance;
     RecognizeFn recognize;
     uint8_t auto_door;
+    uint8_t advance_if_straight; /* Escape the cross line when going straight. */
 } RouteSegment;
 
 static void wait_delivery_done(void)
@@ -138,22 +139,33 @@ static void clear_recognition_buffers(void)
     XBuff[1] = 0;
 }
 
+static void beep_cached_vision_once(void)
+{
+    MedicineCar_SetYellowLed(1U);
+    delay_ms(MED_CAR_FORK_CACHE_BEEP_MS);
+    MedicineCar_SetYellowLed(0U);
+}
+
 static uint8_t request_recognition_pair(void)
 {
     uint8_t attempt;
+    uint8_t waited_for_frame = 0U;
 
     clear_recognition_buffers();
     for (attempt = 0U; attempt < MED_CAR_VISION_RETRY_COUNT; attempt++) {
         VisionRingEntry entry;
 
-        if (VisionRing_ReadNext(&entry) == 0U) {
+        if (VisionRing_ReadLatest(&entry) == 0U) {
+            waited_for_frame = 1U;
             if (VisionRing_WaitForNewEntry(
                     MED_CAR_VISION_UART_TIMEOUT_MS) == 0U) {
                 continue;
             }
-            if (VisionRing_ReadNext(&entry) == 0U) {
+            if (VisionRing_ReadLatest(&entry) == 0U) {
                 continue;
             }
+        } else if (waited_for_frame == 0U) {
+            beep_cached_vision_once();
         }
 
         if (entry.left != 0U) {
@@ -293,18 +305,18 @@ static uint8_t shibie_rp2(void)
 }
 
 static const RouteSegment route12_segments[] = {
-    {SEG_FORK_FIXED, MED_CAR_DISTANCE_FIRST_CHECK, NULL,  1},
-    {SEG_DOOR,       MED_CAR_DISTANCE_MID,         NULL,  0},
-    {SEG_END,        0,                            NULL,  0},
+    {SEG_FORK_FIXED, MED_CAR_DISTANCE_FIRST_CHECK, NULL,  1, 0},
+    {SEG_DOOR,       MED_CAR_DISTANCE_MID,         NULL,  0, 0},
+    {SEG_END,        0,                            NULL,  0, 0},
 };
 
 static const RouteSegment route38_segments[] = {
-    {SEG_CROSS, MED_CAR_DISTANCE_SECOND_CHECK,  NULL,       0},
-    {SEG_FORK,  0,                               shibie,     1},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     0},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_rp2, 1},
-    {SEG_DOOR,  MED_CAR_DISTANCE_MID,            NULL,       0},
-    {SEG_END,   0,                               NULL,       0},
+    {SEG_CROSS, MED_CAR_DISTANCE_SECOND_CHECK,  NULL,       0, 1},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 1},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_rp2, 0, 0},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 0},
+    {SEG_DOOR,  MED_CAR_DISTANCE_MID,            NULL,       0, 0},
+    {SEG_END,   0,                               NULL,       0, 0},
 };
 
 static void find_1(void)
@@ -357,13 +369,6 @@ static uint8_t deliver_if_matched(uint16_t return_cross_distance,
 static void run3_8(void)
 {
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
-    shibie();
-
-    if (deliver_if_matched(MED_CAR_DISTANCE_MID,
-                           MED_CAR_DISTANCE_SECOND_CHECK,
-                           MED_CAR_R3_8_PWM_MAIN) != 0U) {
-        return;
-    }
 
     xunxian(MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
     shibie();
@@ -376,6 +381,15 @@ static void run3_8(void)
     }
 
     xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
+    shibie_rp2();
+
+    if (deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS4,
+                           MED_CAR_DISTANCE_THIRD_CHECK,
+                           MED_CAR_R3_8_PWM_MAIN) != 0U) {
+        return;
+    }
+
+    xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
     shibie();
     (void)deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS4,
                              MED_CAR_DISTANCE_THIRD_CHECK,
@@ -443,11 +457,18 @@ static uint8_t route_run(const RouteSegment *segments,
         switch (seg->type) {
         case SEG_CROSS:
             xunxian(seg->distance, pwm);
+            if (seg->advance_if_straight != 0U) {
+                move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
+                                   MED_CAR_CROSS_ADVANCE_PWM);
+            }
             Return_Push(RETURN_DIR_STRAIGHT);
             break;
 
         case SEG_FORK:
+            VisionRing_Flush();
             xunxian(seg->distance, pwm);
+            Load(0, 0);
+            delay_ms(MED_CAR_FORK_STOP_SETTLE_MS);
             if (seg->recognize != NULL) {
                 seg->recognize();
             }
@@ -457,6 +478,9 @@ static uint8_t route_run(const RouteSegment *segments,
                 }
             } else {
                 Return_Push(RETURN_DIR_STRAIGHT);
+                if (seg->advance_if_straight != 0U) {
+                    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS, pwm);
+                }
             }
             break;
 

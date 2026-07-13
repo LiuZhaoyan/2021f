@@ -77,12 +77,13 @@ void Return_Execute(uint16_t home_distance, int pwm)
         xunxian_until_fork(home_distance, pwm);
         if (dir != RETURN_DIR_STRAIGHT) {
             fork_reverse_turn(dir);
+        } else {
+            move_forward_timed(MED_CAR_CROSS_ADVANCE_MS, pwm);
         }
     }
 
     for (retry = 0U; retry < (uint8_t)MED_CAR_RETURN_CROSS_RETRY_MAX; retry++) {
-        if (xunxian_until_fork(home_distance, pwm) != 0U) {
-            xunxian_until_door(home_distance, pwm);
+        if (xunxian_until_door(home_distance, pwm) != 0U) {
             return;
         }
     }

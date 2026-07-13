@@ -21,7 +21,7 @@ static void ring_push(const VisionRingEntry *entry)
     uint32_t next = (g_ring_write + 1U) & VISION_BUF_MASK;
 
     if (next == g_ring_read) {
-        return;
+        g_ring_read = (g_ring_read + 1U) & VISION_BUF_MASK;
     }
     g_ring_buf[g_ring_write] = *entry;
     g_ring_write = next;
@@ -152,6 +152,23 @@ uint8_t VisionRing_ReadNext(VisionRingEntry *out)
         *out = g_ring_buf[g_ring_read];
     }
     g_ring_read = (g_ring_read + 1U) & VISION_BUF_MASK;
+    return 1U;
+}
+
+uint8_t VisionRing_ReadLatest(VisionRingEntry *out)
+{
+    uint32_t write_snap = g_ring_write;
+    uint32_t latest;
+
+    if (g_ring_read == write_snap) {
+        return 0U;
+    }
+
+    latest = (write_snap - 1U) & VISION_BUF_MASK;
+    if (out != NULL) {
+        *out = g_ring_buf[latest];
+    }
+    g_ring_read = write_snap;
     return 1U;
 }
 
