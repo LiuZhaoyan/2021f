@@ -26,6 +26,8 @@ uint32_t VisionRing_GetCount(void);
 void     VisionRing_Flush(void);
 void     VisionRing_StableArm(void);
 uint8_t  VisionRing_StableRead(VisionRingEntry *out);
+uint8_t  VisionRing_StableIsLocked(void);
+uint8_t  VisionRing_StableWait(uint32_t timeout_ms);
 void     VisionRing_StableRelease(void);
 
 #ifdef __cplusplus

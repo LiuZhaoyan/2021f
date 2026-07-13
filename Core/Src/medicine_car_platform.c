@@ -739,7 +739,9 @@ static uint8_t fork_detected(const uint8_t gray[8])
     return (left || right) ? 1U : 0U;
 }
 
-uint8_t xunxian_until_fork(uint16_t max_distance, int pwm)
+MedicineCarTraceStopReason xunxian_until_fork_or_condition(
+    uint16_t max_distance, int pwm,
+    MedicineCarTraceConditionFn condition_fn)
 {
     static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
     uint32_t guard = 0U;
@@ -774,11 +776,21 @@ uint8_t xunxian_until_fork(uint16_t max_distance, int pwm)
         uint8_t black_count;
         int weighted_sum;
 
+        if ((condition_fn != NULL) && (condition_fn() != 0U)) {
+            stop(1);
+            return MED_CAR_TRACE_STOP_CONDITION;
+        }
+
         MedicineCar_ReadLineSensors(gray);
+
+        if ((condition_fn != NULL) && (condition_fn() != 0U)) {
+            stop(1);
+            return MED_CAR_TRACE_STOP_CONDITION;
+        }
 
         if (fork_detected(gray) != 0U) {
             stop(1);
-            return 1U;
+            return MED_CAR_TRACE_STOP_FORK;
         }
 
         line_seen = ((gray[0] == MED_CAR_GRAY_BLACK_LEVEL) ||
@@ -826,7 +838,13 @@ uint8_t xunxian_until_fork(uint16_t max_distance, int pwm)
     }
 
     stop(1);
-    return 0U;
+    return MED_CAR_TRACE_STOP_LIMIT;
+}
+
+uint8_t xunxian_until_fork(uint16_t max_distance, int pwm)
+{
+    return (xunxian_until_fork_or_condition(max_distance, pwm, NULL) ==
+            MED_CAR_TRACE_STOP_FORK) ? 1U : 0U;
 }
 
 void move_forward_timed(uint32_t duration_ms, int pwm)

@@ -23,6 +23,14 @@ extern int NumBuff[2];
 extern int XBuff[2];
 extern char num[50];
 
+typedef uint8_t (*MedicineCarTraceConditionFn)(void);
+
+typedef enum {
+    MED_CAR_TRACE_STOP_LIMIT = 0,
+    MED_CAR_TRACE_STOP_FORK,
+    MED_CAR_TRACE_STOP_CONDITION
+} MedicineCarTraceStopReason;
+
 void MedicineCarPlatform_Init(void);
 void MedicineCarPlatform_Service(void);
 
@@ -55,6 +63,9 @@ uint8_t sensor_turn_right(void);
 uint8_t sensor_diaotou(void);
 uint8_t xunxian_until_door(uint16_t max_distance, int pwm);
 uint8_t xunxian_until_fork(uint16_t max_distance, int pwm);
+MedicineCarTraceStopReason xunxian_until_fork_or_condition(
+    uint16_t max_distance, int pwm,
+    MedicineCarTraceConditionFn condition_fn);
 void move_forward_timed(uint32_t duration_ms, int pwm);
 void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks);
 

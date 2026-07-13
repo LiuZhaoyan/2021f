@@ -300,6 +300,23 @@ uint8_t VisionRing_StableRead(VisionRingEntry *out)
     return locked;
 }
 
+uint8_t VisionRing_StableIsLocked(void)
+{
+    return g_stable_locked;
+}
+
+uint8_t VisionRing_StableWait(uint32_t timeout_ms)
+{
+    uint32_t start = HAL_GetTick();
+
+    while (VisionRing_StableIsLocked() == 0U) {
+        if ((HAL_GetTick() - start) >= timeout_ms) {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
 void VisionRing_StableRelease(void)
 {
     uint32_t primask = __get_PRIMASK();
