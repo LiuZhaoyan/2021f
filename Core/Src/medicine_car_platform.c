@@ -606,7 +606,6 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
     int last_direction = 0;
     uint8_t confirm_count = 0U;
     uint8_t miss_count = 0U;
-    uint8_t prev_black_count = 0U;
     int correction;
 
     MedicineCar_ResetEncoders();
@@ -647,29 +646,25 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
         }
 
         if (black_count >= MED_CAR_DOOR_BLACK_MIN) {
-            miss_count = 0U;
-            confirm_count++;
-            if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
-                stop(1);
-                return 1U;
-            }
-        } else {
-            uint8_t mid_black = 0U;
-            uint8_t ch;
-
-            for (ch = 2U; ch <= 5U; ch++) {
-                if (gray[ch] == MED_CAR_GRAY_BLACK_LEVEL) {
-                    mid_black++;
+                miss_count = 0U;
+                confirm_count++;
+                if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
+                    stop(1);
+                    return 1U;
                 }
-            }
+            } else {
+                uint8_t mid_black = 0U;
+                uint8_t ch;
 
-            if (mid_black >= 2U &&
-                gray[0] == MED_CAR_GRAY_WHITE_LEVEL &&
-                gray[1] == MED_CAR_GRAY_WHITE_LEVEL &&
-                gray[6] == MED_CAR_GRAY_WHITE_LEVEL &&
-                gray[7] == MED_CAR_GRAY_WHITE_LEVEL) {
-                if (prev_black_count >= MED_CAR_DOOR_BLACK_MIN ||
-                    prev_black_count <= 1U) {
+                for (ch = 2U; ch <= 5U; ch++) {
+                    if (gray[ch] == MED_CAR_GRAY_BLACK_LEVEL) {
+                        mid_black++;
+                    }
+                }
+
+                if (mid_black >= 2U &&
+                    (gray[0] == MED_CAR_GRAY_BLACK_LEVEL ||
+                     gray[7] == MED_CAR_GRAY_BLACK_LEVEL)) {
                     miss_count = 0U;
                     confirm_count++;
                     if (confirm_count >= MED_CAR_DOOR_CONFIRM_CNT) {
@@ -683,14 +678,7 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
                         miss_count = 0U;
                     }
                 }
-            } else {
-                miss_count++;
-                if (miss_count >= MED_CAR_DOOR_MISS_MAX) {
-                    confirm_count = 0U;
-                    miss_count = 0U;
-                }
             }
-        }
 
         line_seen = ((gray[0] == MED_CAR_GRAY_BLACK_LEVEL) ||
                      (gray[1] == MED_CAR_GRAY_BLACK_LEVEL) ||
@@ -733,7 +721,6 @@ uint8_t xunxian_until_door(uint16_t max_distance, int pwm)
              trim_run_pwm(pwm + correction, MED_CAR_RIGHT_PWM_TRIM_NUM));
         HAL_Delay(10U);
         Read_Speed();
-        prev_black_count = black_count;
         guard++;
     }
 
