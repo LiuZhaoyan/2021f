@@ -24,6 +24,9 @@ uint8_t  VisionRing_PeekRecent(VisionRingEntry *out_entries,
                                uint32_t *actual_count);
 uint32_t VisionRing_GetCount(void);
 void     VisionRing_Flush(void);
+void     VisionRing_StableArm(void);
+uint8_t  VisionRing_StableRead(VisionRingEntry *out);
+void     VisionRing_StableRelease(void);
 
 #ifdef __cplusplus
 }

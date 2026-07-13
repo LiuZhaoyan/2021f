@@ -15,6 +15,52 @@ static volatile uint32_t g_ring_write;
 static volatile uint32_t g_ring_read;
 static volatile uint8_t  g_isr_state;
 static uint8_t           g_isr_packet[5];
+static volatile uint8_t  g_stable_armed;
+static volatile uint8_t  g_stable_locked;
+static volatile uint8_t  g_stable_candidate_count;
+static volatile VisionRingEntry g_stable_candidate;
+static volatile VisionRingEntry g_stable_entry;
+
+static void stable_clear_state(void)
+{
+    g_stable_armed = 0U;
+    g_stable_locked = 0U;
+    g_stable_candidate_count = 0U;
+    g_stable_candidate.left = 0U;
+    g_stable_candidate.right = 0U;
+    g_stable_candidate.timestamp_ms = 0U;
+    g_stable_entry.left = 0U;
+    g_stable_entry.right = 0U;
+    g_stable_entry.timestamp_ms = 0U;
+}
+
+static void stable_feed_entry(const VisionRingEntry *entry)
+{
+    if ((g_stable_armed == 0U) || (g_stable_locked != 0U) ||
+        (entry == NULL)) {
+        return;
+    }
+
+    if ((g_stable_candidate_count != 0U) &&
+        (g_stable_candidate.left == entry->left) &&
+        (g_stable_candidate.right == entry->right)) {
+        if (g_stable_candidate_count < 0xFFU) {
+            g_stable_candidate_count++;
+        }
+    } else {
+        g_stable_candidate.left = entry->left;
+        g_stable_candidate.right = entry->right;
+        g_stable_candidate.timestamp_ms = entry->timestamp_ms;
+        g_stable_candidate_count = 1U;
+    }
+
+    if (g_stable_candidate_count >= MED_CAR_VISION_STABLE_FRAME_COUNT) {
+        g_stable_entry.left = entry->left;
+        g_stable_entry.right = entry->right;
+        g_stable_entry.timestamp_ms = entry->timestamp_ms;
+        g_stable_locked = 1U;
+    }
+}
 
 static void ring_push(const VisionRingEntry *entry)
 {
@@ -45,6 +91,7 @@ static void isr_process_complete_packet(void)
     entry.left         = left;
     entry.right        = right;
     entry.timestamp_ms = HAL_GetTick();
+    stable_feed_entry(&entry);
     ring_push(&entry);
 }
 
@@ -115,6 +162,7 @@ void VisionRing_Init(void)
     g_ring_write = 0U;
     g_ring_read  = 0U;
     g_isr_state  = 0U;
+    stable_clear_state();
 
     __HAL_UART_CLEAR_PEFLAG(&huart3);
     __HAL_UART_CLEAR_FEFLAG(&huart3);
@@ -217,4 +265,46 @@ uint32_t VisionRing_GetCount(void)
 void VisionRing_Flush(void)
 {
     g_ring_read = g_ring_write;
+}
+
+void VisionRing_StableArm(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    stable_clear_state();
+    g_ring_read = g_ring_write;
+    g_stable_armed = 1U;
+    __set_PRIMASK(primask);
+}
+
+uint8_t VisionRing_StableRead(VisionRingEntry *out)
+{
+    uint32_t primask;
+    uint8_t locked;
+
+    if (out == NULL) {
+        return 0U;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    locked = g_stable_locked;
+    if (locked != 0U) {
+        out->left = g_stable_entry.left;
+        out->right = g_stable_entry.right;
+        out->timestamp_ms = g_stable_entry.timestamp_ms;
+    }
+    __set_PRIMASK(primask);
+
+    return locked;
+}
+
+void VisionRing_StableRelease(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    stable_clear_state();
+    __set_PRIMASK(primask);
 }

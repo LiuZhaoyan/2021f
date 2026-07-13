@@ -25,7 +25,21 @@ typedef struct {
     RecognizeFn recognize;
     uint8_t auto_door;
     uint8_t advance_if_straight; /* Escape the cross line when going straight. */
+    uint8_t stable_precache;
 } RouteSegment;
+
+static void beep_matched_vision_once(void);
+
+static uint8_t find_matched_side(void)
+{
+    if ((NumBuff[0] != 0) && (aim == NumBuff[0])) {
+        return (XBuff[0] == 1) ? 1U : 2U;
+    }
+    if ((NumBuff[1] != 0) && (aim == NumBuff[1])) {
+        return (XBuff[1] == 1) ? 1U : 2U;
+    }
+    return 0U;
+}
 
 static void wait_delivery_done(void)
 {
@@ -52,27 +66,22 @@ static void finish_at_home(uint16_t distance, int pwm)
 
 static uint8_t check_match_and_turn(void)
 {
-    if (aim == NumBuff[0]) {
-        if (XBuff[0] == 1) {
-            Return_Push(RETURN_DIR_LEFT);
-            sensor_turn_left();
-        } else {
-            Return_Push(RETURN_DIR_RIGHT);
-            sensor_turn_right();
-        }
-        return 1U;
+    uint8_t side = find_matched_side();
+
+    if (side == 0U) {
+        return 0U;
     }
-    if (aim == NumBuff[1]) {
-        if (XBuff[1] == 1) {
-            Return_Push(RETURN_DIR_LEFT);
-            sensor_turn_left();
-        } else {
-            Return_Push(RETURN_DIR_RIGHT);
-            sensor_turn_right();
-        }
-        return 1U;
+
+    VisionRing_StableRelease();
+    beep_matched_vision_once();
+    if (side == 1U) {
+        Return_Push(RETURN_DIR_LEFT);
+        sensor_turn_left();
+    } else {
+        Return_Push(RETURN_DIR_RIGHT);
+        sensor_turn_right();
     }
-    return 0U;
+    return 1U;
 }
 
 #if MED_CAR_USE_SENSOR_GUIDED_TURNS
@@ -139,56 +148,37 @@ static void clear_recognition_buffers(void)
     XBuff[1] = 0;
 }
 
-static void beep_cached_vision_once(void)
+static void beep_matched_vision_once(void)
 {
     MedicineCar_SetYellowLed(1U);
-    delay_ms(MED_CAR_FORK_CACHE_BEEP_MS);
+    delay_ms(MED_CAR_MATCH_BEEP_MS);
     MedicineCar_SetYellowLed(0U);
 }
 
 static uint8_t request_recognition_pair(void)
 {
-    uint8_t attempt;
-    uint8_t waited_for_frame = 0U;
+    VisionRingEntry entry;
 
     clear_recognition_buffers();
-    for (attempt = 0U; attempt < MED_CAR_VISION_RETRY_COUNT; attempt++) {
-        VisionRingEntry entry;
+    if (VisionRing_StableRead(&entry) == 0U) {
+        return 0U;
+    }
 
-        if (VisionRing_ReadLatest(&entry) == 0U) {
-            waited_for_frame = 1U;
-            if (VisionRing_WaitForNewEntry(
-                    MED_CAR_VISION_UART_TIMEOUT_MS) == 0U) {
-                continue;
-            }
-            if (VisionRing_ReadLatest(&entry) == 0U) {
-                continue;
-            }
-        } else if (waited_for_frame == 0U) {
-            beep_cached_vision_once();
-        }
-
+    if (entry.left != 0U) {
+        NumBuff[0] = (int)entry.left;
+        XBuff[0] = 1;
+    }
+    if (entry.right != 0U) {
         if (entry.left != 0U) {
-            NumBuff[0] = (int)entry.left;
-            XBuff[0] = 1;
-        }
-        if (entry.right != 0U) {
-            if (entry.left != 0U) {
-                NumBuff[1] = (int)entry.right;
-                XBuff[1] = 2;
-            } else {
-                NumBuff[0] = (int)entry.right;
-                XBuff[0] = 2;
-            }
-        }
-
-        if ((entry.left != 0U) || (entry.right != 0U)) {
-            return 1U;
+            NumBuff[1] = (int)entry.right;
+            XBuff[1] = 2;
+        } else {
+            NumBuff[0] = (int)entry.right;
+            XBuff[0] = 2;
         }
     }
 
-    clear_recognition_buffers();
-    return 0U;
+    return 1U;
 }
 
 static uint8_t shibie(void)
@@ -305,18 +295,18 @@ static uint8_t shibie_rp2(void)
 }
 
 static const RouteSegment route12_segments[] = {
-    {SEG_FORK_FIXED, MED_CAR_DISTANCE_FIRST_CHECK, NULL,  1, 0},
-    {SEG_DOOR,       MED_CAR_DISTANCE_MID,         NULL,  0, 0},
-    {SEG_END,        0,                            NULL,  0, 0},
+    {SEG_FORK_FIXED, MED_CAR_DISTANCE_FIRST_CHECK, NULL,  1, 0, 0},
+    {SEG_DOOR,       MED_CAR_DISTANCE_MID,         NULL,  0, 0, 0},
+    {SEG_END,        0,                            NULL,  0, 0, 0},
 };
 
 static const RouteSegment route38_segments[] = {
-    {SEG_CROSS, MED_CAR_DISTANCE_SECOND_CHECK,  NULL,       0, 1},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 1},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_rp2, 0, 0},
-    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 0},
-    {SEG_DOOR,  MED_CAR_DISTANCE_MID,            NULL,       0, 0},
-    {SEG_END,   0,                               NULL,       0, 0},
+    {SEG_CROSS, MED_CAR_DISTANCE_SECOND_CHECK,  NULL,       0, 1, 0},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 1, 1},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie_rp2, 0, 0, 0},
+    {SEG_FORK,  MED_CAR_DISTANCE_R3_8_SHORT,     shibie,     1, 0, 1},
+    {SEG_DOOR,  MED_CAR_DISTANCE_MID,            NULL,       0, 0, 0},
+    {SEG_END,   0,                               NULL,       0, 0, 0},
 };
 
 static void find_1(void)
@@ -345,40 +335,37 @@ static uint8_t deliver_if_matched(uint16_t return_cross_distance,
                                   uint16_t home_distance,
                                   int pwm)
 {
-    if (aim == NumBuff[0]) {
-        if (XBuff[0] == 1) {
-            deliver_left(return_cross_distance, home_distance, pwm);
-        } else {
-            deliver_right(return_cross_distance, home_distance, pwm);
-        }
-        return 1U;
+    uint8_t side = find_matched_side();
+
+    if (side == 0U) {
+        return 0U;
     }
 
-    if (aim == NumBuff[1]) {
-        if (XBuff[1] == 1) {
-            deliver_left(return_cross_distance, home_distance, pwm);
-        } else {
-            deliver_right(return_cross_distance, home_distance, pwm);
-        }
-        return 1U;
+    VisionRing_StableRelease();
+    beep_matched_vision_once();
+    if (side == 1U) {
+        deliver_left(return_cross_distance, home_distance, pwm);
+    } else {
+        deliver_right(return_cross_distance, home_distance, pwm);
     }
-
-    return 0U;
+    return 1U;
 }
 
 static void run3_8(void)
 {
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_MAIN);
 
+    VisionRing_StableArm();
     xunxian(MED_CAR_DISTANCE_R3_8_APPROACH, MED_CAR_R3_8_PWM_MAIN);
-    shibie();
     xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
+    shibie();
 
     if (deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS3,
                            MED_CAR_DISTANCE_THIRD_CHECK,
                            MED_CAR_R3_8_PWM_MAIN) != 0U) {
         return;
     }
+    VisionRing_StableRelease();
 
     xunxian(MED_CAR_DISTANCE_THIRD_CHECK, MED_CAR_R3_8_PWM_MAIN);
     shibie_rp2();
@@ -388,30 +375,26 @@ static void run3_8(void)
                            MED_CAR_R3_8_PWM_MAIN) != 0U) {
         return;
     }
+    VisionRing_StableRelease();
 
+    VisionRing_StableArm();
     xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
     shibie();
-    (void)deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS4,
-                             MED_CAR_DISTANCE_THIRD_CHECK,
-                             MED_CAR_R3_8_PWM_MAIN);
+    if (deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS4,
+                           MED_CAR_DISTANCE_THIRD_CHECK,
+                           MED_CAR_R3_8_PWM_MAIN) == 0U) {
+        VisionRing_StableRelease();
+    }
 }
 
 static void fahui(void)
 {
-    uint8_t recognize_attempts = 0U;
-
-    VisionRing_Flush();
+    VisionRing_StableArm();
     xunxian(MED_CAR_DISTANCE_SECOND_CHECK, MED_CAR_R3_8_PWM_FAHUI);
-
-    do {
-        recognize_attempts++;
-        if (shibie() == 0U) {
-            break;
-        }
-    } while ((NumBuff[0] == NumBuff[1]) &&
-             (recognize_attempts < MED_CAR_VISION_RETRY_COUNT));
+    shibie();
 
     if ((NumBuff[0] == 0) && (NumBuff[1] == 0)) {
+        VisionRing_StableRelease();
         Load(0, 0);
         return;
     }
@@ -421,16 +404,19 @@ static void fahui(void)
                            MED_CAR_R3_8_PWM_FAHUI) != 0U) {
         return;
     }
+    VisionRing_StableRelease();
 
-    shibie();
+    VisionRing_StableArm();
     zhao_bai(MED_CAR_DISTANCE_R3_8_ZHAO_BAI, MED_CAR_R3_8_PWM_MAIN);
     xunxian(MED_CAR_DISTANCE_R3_8_SHORT, MED_CAR_R3_8_PWM_MAIN);
+    shibie();
 
     if (deliver_if_matched(MED_CAR_DISTANCE_RETURN_CROSS3,
                            MED_CAR_DISTANCE_THIRD_CHECK,
                            MED_CAR_R3_8_PWM_MAIN) != 0U) {
         return;
     }
+    VisionRing_StableRelease();
 
     run3_8();
 }
@@ -465,7 +451,11 @@ static uint8_t route_run(const RouteSegment *segments,
             break;
 
         case SEG_FORK:
-            VisionRing_Flush();
+            if (seg->stable_precache != 0U) {
+                VisionRing_StableArm();
+            } else {
+                VisionRing_Flush();
+            }
             xunxian(seg->distance, pwm);
             Load(0, 0);
             delay_ms(MED_CAR_FORK_STOP_SETTLE_MS);
@@ -477,6 +467,7 @@ static uint8_t route_run(const RouteSegment *segments,
                     door_mode = 1U;
                 }
             } else {
+                VisionRing_StableRelease();
                 Return_Push(RETURN_DIR_STRAIGHT);
                 if (seg->advance_if_straight != 0U) {
                     move_forward_timed(MED_CAR_CROSS_ADVANCE_MS, pwm);
