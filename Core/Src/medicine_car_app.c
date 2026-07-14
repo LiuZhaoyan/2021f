@@ -254,13 +254,21 @@ static uint8_t shibie_rp2(void)
 
     clear_recognition_buffers();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
+    if (VisionRing_StableRead(&center) == 0U) {
+        VisionRing_StableRelease();
+        return 0U;
+    }
     VisionRing_StableRelease();
+    rp2_add_unique(center.left, FORK_LEFT);
+    rp2_add_unique(center.right, FORK_RIGHT);
+    /* rp2_read_fresh_entry 方式读取中心帧（已废弃）
     if (rp2_read_fresh_entry(&center, 0U) == 0U) {
         return 0U;
     }
     rp2_add_unique(center.left, FORK_LEFT);
     rp2_add_unique(center.right, FORK_RIGHT);
     VisionRing_StableRelease();
+    */
 
     /* Left turn -> scan -> reverse back to center */
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
