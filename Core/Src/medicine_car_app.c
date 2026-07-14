@@ -259,6 +259,7 @@ static uint8_t shibie_rp2(void)
     rp2_add_unique(center.right, FORK_RIGHT);
     VisionRing_StableRelease();
 
+    /* Left turn -> scan -> reverse back to center */
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
                     MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
                     MED_CAR_RP2_WIGGLE_TICKS);
@@ -266,15 +267,18 @@ static uint8_t shibie_rp2(void)
     if (rp2_read_fresh_entry(&outer) != 0U) {
         rp2_add_unique(outer.left, FORK_LEFT);
     }
-
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
                     MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
-                    (uint16_t)(MED_CAR_RP2_WIGGLE_TICKS * 2U));
+                    MED_CAR_RP2_WIGGLE_TICKS);
+
+    /* Right turn -> scan -> reverse back to center */
+    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+                    MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
+                    MED_CAR_RP2_WIGGLE_TICKS);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
     if (rp2_read_fresh_entry(&outer) != 0U) {
         rp2_add_unique(outer.right, FORK_RIGHT);
     }
-
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
                     MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
                     MED_CAR_RP2_WIGGLE_TICKS);
