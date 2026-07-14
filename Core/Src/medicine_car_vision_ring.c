@@ -18,6 +18,8 @@ static uint8_t           g_isr_packet[5];
 static volatile uint8_t  g_stable_armed;
 static volatile uint8_t  g_stable_locked;
 static volatile uint8_t  g_stable_candidate_count;
+static volatile uint8_t  g_stable_require_complete_pair;
+static volatile uint8_t  g_complete_pair_seen;
 static volatile VisionRingEntry g_stable_candidate;
 static volatile VisionRingEntry g_stable_entry;
 
@@ -26,6 +28,8 @@ static void stable_clear_state(void)
     g_stable_armed = 0U;
     g_stable_locked = 0U;
     g_stable_candidate_count = 0U;
+    g_stable_require_complete_pair = 0U;
+    g_complete_pair_seen = 0U;
     g_stable_candidate.left = 0U;
     g_stable_candidate.right = 0U;
     g_stable_candidate.timestamp_ms = 0U;
@@ -36,8 +40,18 @@ static void stable_clear_state(void)
 
 static void stable_feed_entry(const VisionRingEntry *entry)
 {
-    if ((g_stable_armed == 0U) || (g_stable_locked != 0U) ||
-        (entry == NULL)) {
+    if ((g_stable_armed == 0U) || (entry == NULL)) {
+        return;
+    }
+
+    if ((entry->left != 0U) && (entry->right != 0U)) {
+        g_complete_pair_seen = 1U;
+    }
+    if (g_stable_locked != 0U) {
+        return;
+    }
+    if ((g_stable_require_complete_pair != 0U) &&
+        ((entry->left == 0U) || (entry->right == 0U))) {
         return;
     }
 
@@ -267,7 +281,7 @@ void VisionRing_Flush(void)
     g_ring_read = g_ring_write;
 }
 
-void VisionRing_StableArm(void)
+static void stable_arm(uint8_t require_complete_pair)
 {
     uint32_t primask = __get_PRIMASK();
 
@@ -275,7 +289,18 @@ void VisionRing_StableArm(void)
     stable_clear_state();
     g_ring_read = g_ring_write;
     g_stable_armed = 1U;
+    g_stable_require_complete_pair = require_complete_pair;
     __set_PRIMASK(primask);
+}
+
+void VisionRing_StableArm(void)
+{
+    stable_arm(0U);
+}
+
+void VisionRing_StableArmCompletePair(void)
+{
+    stable_arm(1U);
 }
 
 uint8_t VisionRing_StableRead(VisionRingEntry *out)
@@ -303,6 +328,11 @@ uint8_t VisionRing_StableRead(VisionRingEntry *out)
 uint8_t VisionRing_StableIsLocked(void)
 {
     return g_stable_locked;
+}
+
+uint8_t VisionRing_CompletePairSeen(void)
+{
+    return g_complete_pair_seen;
 }
 
 uint8_t VisionRing_StableWait(uint32_t timeout_ms)
