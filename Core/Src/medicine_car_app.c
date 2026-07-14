@@ -322,7 +322,6 @@ static uint8_t rp2_scan_before_fork(uint16_t max_distance, int pwm)
 {
     MedicineCarTraceStopReason reason;
     uint8_t scan_ok;
-    uint8_t fork_found;
 
     rp2_clear_result();
     clear_recognition_buffers();
@@ -338,8 +337,8 @@ static uint8_t rp2_scan_before_fork(uint16_t max_distance, int pwm)
     if (scan_ok == 0U) {
         rp2_clear_result();
     }
-    fork_found = xunxian_until_fork(max_distance, pwm);
-    if ((scan_ok == 0U) || (fork_found == 0U)) {
+    move_forward_timed(MED_CAR_RP2_FORK_ADVANCE_MS, pwm);
+    if (scan_ok == 0U) {
         clear_recognition_buffers();
         rp2_clear_result();
         return 0U;
