@@ -251,8 +251,8 @@ static uint8_t shibie_rp2(void)
 
     clear_recognition_buffers();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    if (VisionRing_CompletePairRead(&center) == 0U) {
-        VisionRing_StableRelease();
+    VisionRing_StableRelease();
+    if (rp2_read_fresh_entry(&center) == 0U) {
         return 0U;
     }
     rp2_add_unique(center.left, FORK_LEFT);
@@ -324,7 +324,7 @@ static uint8_t rp2_scan_before_fork(uint16_t max_distance, int pwm)
     clear_recognition_buffers();
     VisionRing_StableArm();
     reason = xunxian_until_fork_or_condition(
-        max_distance, pwm, VisionRing_CompletePairSeen);
+        max_distance, pwm, VisionRing_AnyDigitSeen);
 
     if (reason != MED_CAR_TRACE_STOP_CONDITION) {
         VisionRing_StableRelease();

@@ -18,26 +18,22 @@ static uint8_t           g_isr_packet[5];
 static volatile uint8_t  g_stable_armed;
 static volatile uint8_t  g_stable_locked;
 static volatile uint8_t  g_stable_candidate_count;
-static volatile uint8_t  g_complete_pair_seen;
+static volatile uint8_t  g_any_digit_seen;
 static volatile VisionRingEntry g_stable_candidate;
 static volatile VisionRingEntry g_stable_entry;
-static volatile VisionRingEntry g_complete_pair_entry;
 
 static void stable_clear_state(void)
 {
     g_stable_armed = 0U;
     g_stable_locked = 0U;
     g_stable_candidate_count = 0U;
-    g_complete_pair_seen = 0U;
+    g_any_digit_seen = 0U;
     g_stable_candidate.left = 0U;
     g_stable_candidate.right = 0U;
     g_stable_candidate.timestamp_ms = 0U;
     g_stable_entry.left = 0U;
     g_stable_entry.right = 0U;
     g_stable_entry.timestamp_ms = 0U;
-    g_complete_pair_entry.left = 0U;
-    g_complete_pair_entry.right = 0U;
-    g_complete_pair_entry.timestamp_ms = 0U;
 }
 
 static void stable_feed_entry(const VisionRingEntry *entry)
@@ -46,13 +42,7 @@ static void stable_feed_entry(const VisionRingEntry *entry)
         return;
     }
 
-    if ((g_complete_pair_seen == 0U) &&
-        (entry->left != 0U) && (entry->right != 0U)) {
-        g_complete_pair_entry.left = entry->left;
-        g_complete_pair_entry.right = entry->right;
-        g_complete_pair_entry.timestamp_ms = entry->timestamp_ms;
-        g_complete_pair_seen = 1U;
-    }
+    g_any_digit_seen = 1U;
     if (g_stable_locked != 0U) {
         return;
     }
@@ -320,30 +310,9 @@ uint8_t VisionRing_StableIsLocked(void)
     return g_stable_locked;
 }
 
-uint8_t VisionRing_CompletePairSeen(void)
+uint8_t VisionRing_AnyDigitSeen(void)
 {
-    return g_complete_pair_seen;
-}
-
-uint8_t VisionRing_CompletePairRead(VisionRingEntry *out)
-{
-    uint32_t primask;
-    uint8_t seen;
-
-    if (out == NULL) {
-        return 0U;
-    }
-
-    primask = __get_PRIMASK();
-    __disable_irq();
-    seen = g_complete_pair_seen;
-    if (seen != 0U) {
-        out->left = g_complete_pair_entry.left;
-        out->right = g_complete_pair_entry.right;
-        out->timestamp_ms = g_complete_pair_entry.timestamp_ms;
-    }
-    __set_PRIMASK(primask);
-    return seen;
+    return g_any_digit_seen;
 }
 
 uint8_t VisionRing_StableWait(uint32_t timeout_ms)
