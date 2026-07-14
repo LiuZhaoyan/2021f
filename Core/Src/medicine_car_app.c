@@ -232,13 +232,18 @@ static void rp2_add_unique(uint8_t num, uint8_t side)
     }
 }
 
-static uint8_t rp2_read_fresh_entry(VisionRingEntry *entry)
+static uint8_t rp2_read_fresh_entry(VisionRingEntry *entry, uint8_t flush_first)
 {
     if (entry == NULL) {
         return 0U;
     }
-    VisionRing_Flush();
-    if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
+    if (flush_first != 0U) {
+        VisionRing_Flush();
+    }
+    if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) != 0U) {
+        return VisionRing_ReadLatest(entry);
+    }
+    if (flush_first != 0U) {
         return 0U;
     }
     return VisionRing_ReadLatest(entry);
@@ -252,7 +257,7 @@ static uint8_t shibie_rp2(void)
     clear_recognition_buffers();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
     VisionRing_StableRelease();
-    if (rp2_read_fresh_entry(&center) == 0U) {
+    if (rp2_read_fresh_entry(&center, 0U) == 0U) {
         return 0U;
     }
     rp2_add_unique(center.left, FORK_LEFT);
@@ -264,7 +269,7 @@ static uint8_t shibie_rp2(void)
                     MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
                     MED_CAR_RP2_WIGGLE_TICKS);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    if (rp2_read_fresh_entry(&outer) != 0U) {
+    if (rp2_read_fresh_entry(&outer, 1U) != 0U) {
         rp2_add_unique(outer.left, FORK_LEFT);
     }
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
@@ -276,7 +281,7 @@ static uint8_t shibie_rp2(void)
                     MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
                     MED_CAR_RP2_WIGGLE_TICKS);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    if (rp2_read_fresh_entry(&outer) != 0U) {
+    if (rp2_read_fresh_entry(&outer, 1U) != 0U) {
         rp2_add_unique(outer.right, FORK_RIGHT);
     }
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,

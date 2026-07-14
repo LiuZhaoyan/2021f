@@ -74,6 +74,7 @@ void Return_Execute(uint16_t home_distance, int pwm)
     while (!Return_IsEmpty()) {
         uint8_t dir = return_pop();
 
+        move_forward_timed(MED_CAR_RETURN_FORK_CLEAR_MS, pwm);
         xunxian_until_fork(home_distance, pwm);
         if (dir != RETURN_DIR_STRAIGHT) {
             fork_reverse_turn(dir);
