@@ -239,12 +239,10 @@ static uint8_t rp2_read_fresh_entry(VisionRingEntry *entry, uint8_t flush_first)
     }
     if (flush_first != 0U) {
         VisionRing_Flush();
-    }
-    if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) != 0U) {
+        if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
+            return 0U;
+        }
         return VisionRing_ReadLatest(entry);
-    }
-    if (flush_first != 0U) {
-        return 0U;
     }
     return VisionRing_ReadLatest(entry);
 }
