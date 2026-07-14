@@ -37,9 +37,56 @@ typedef struct {
 } Rp2RecognitionResult;
 
 static Rp2RecognitionResult rp2_result;
+static uint8_t rp2_test_logging;
+static uint8_t rp2_test_turn_ok;
 
 static void beep_matched_vision_once(void);
 static void rp2_clear_result(void);
+
+#define RP2_TEST_LOG(...)                      \
+    do {                                       \
+        if (rp2_test_logging != 0U) {          \
+            u2_printf(__VA_ARGS__);            \
+        }                                      \
+    } while (0)
+
+static uint32_t rp2_encoder_abs_sum(void)
+{
+    uint32_t left = (Encoder_Left < 0) ?
+                    (uint32_t)(-Encoder_Left) : (uint32_t)Encoder_Left;
+    uint32_t right = (Encoder_Right < 0) ?
+                     (uint32_t)(-Encoder_Right) : (uint32_t)Encoder_Right;
+
+    return left + right;
+}
+
+static void rp2_wiggle_with_log(const char *stage,
+                                int left_pwm, int right_pwm)
+{
+    uint32_t total_ticks;
+
+    if (rp2_test_logging == 0U) {
+        wiggle_by_ticks(left_pwm, right_pwm, MED_CAR_RP2_WIGGLE_TICKS);
+        return;
+    }
+
+    RP2_TEST_LOG("[RP2][WIGGLE] %s start pwm=(%d,%d) target=%u timeout=%ums\r\n",
+                 stage,
+                 left_pwm,
+                 right_pwm,
+                 (unsigned int)MED_CAR_RP2_WIGGLE_TICKS,
+                 (unsigned int)MED_CAR_RP2_WIGGLE_TIMEOUT_MS);
+    wiggle_by_ticks(left_pwm, right_pwm, MED_CAR_RP2_WIGGLE_TICKS);
+    Read_Speed();
+    total_ticks = rp2_encoder_abs_sum();
+    RP2_TEST_LOG("[RP2][WIGGLE] %s %s enc=(%d,%d) total=%lu\r\n",
+                 stage,
+                 (total_ticks >= (uint32_t)MED_CAR_RP2_WIGGLE_TICKS) ?
+                 "OK" : "TIMEOUT",
+                 Encoder_Left,
+                 Encoder_Right,
+                 (unsigned long)total_ticks);
+}
 
 static uint8_t find_matched_side(void)
 {
@@ -78,8 +125,13 @@ static void finish_at_home(uint16_t distance, int pwm)
 static uint8_t check_match_and_turn(void)
 {
     uint8_t side = find_matched_side();
+    uint8_t turn_ok;
+
+    RP2_TEST_LOG("[RP2][MATCH] aim=%d Num=[%d,%d] X=[%d,%d] side=%u\r\n",
+                 aim, NumBuff[0], NumBuff[1], XBuff[0], XBuff[1], side);
 
     if (side == 0U) {
+        RP2_TEST_LOG("[RP2][MATCH] MISS: target was not collected\r\n");
         return 0U;
     }
 
@@ -87,12 +139,19 @@ static uint8_t check_match_and_turn(void)
     rp2_clear_result();
     beep_matched_vision_once();
     if (side == 1U) {
+        RP2_TEST_LOG("[RP2][TURN] LEFT command\r\n");
         Return_Push(RETURN_DIR_LEFT);
-        sensor_turn_left();
+        turn_ok = sensor_turn_left();
     } else {
+        RP2_TEST_LOG("[RP2][TURN] RIGHT command\r\n");
         Return_Push(RETURN_DIR_RIGHT);
-        sensor_turn_right();
+        turn_ok = sensor_turn_right();
     }
+    RP2_TEST_LOG("[RP2][TURN] %s enc=(%d,%d)\r\n",
+                 (turn_ok != 0U) ? "OK" : "TIMEOUT",
+                 Encoder_Left,
+                 Encoder_Right);
+    rp2_test_turn_ok = turn_ok;
     return 1U;
 }
 
@@ -222,6 +281,7 @@ static void rp2_add_unique(uint8_t num, uint8_t side)
     }
     for (i = 0U; i < rp2_result.count; i++) {
         if (rp2_result.nums[i] == (int)num) {
+            RP2_TEST_LOG("[RP2][COLLECT] duplicate num=%u ignored\r\n", num);
             return;
         }
     }
@@ -229,6 +289,10 @@ static void rp2_add_unique(uint8_t num, uint8_t side)
         rp2_result.nums[rp2_result.count] = (int)num;
         rp2_result.sides[rp2_result.count] = side;
         rp2_result.count++;
+        RP2_TEST_LOG("[RP2][COLLECT] num=%u side=%s count=%u\r\n",
+                     num,
+                     (side == FORK_LEFT) ? "LEFT" : "RIGHT",
+                     rp2_result.count);
     }
 }
 
@@ -238,22 +302,47 @@ static uint8_t rp2_read_fresh_entry(VisionRingEntry *entry, uint8_t flush_first)
         return 0U;
     }
     if (flush_first != 0U) {
+        RP2_TEST_LOG("[RP2][VISION] flush and wait fresh valid frame, timeout=%ums\r\n",
+                     (unsigned int)MED_CAR_RP2_SCAN_TIMEOUT_MS);
         VisionRing_Flush();
         if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
+            RP2_TEST_LOG("[RP2][VISION] TIMEOUT: no fresh non-zero frame\r\n");
             return 0U;
         }
-        return VisionRing_ReadLatest(entry);
+        if (VisionRing_ReadLatest(entry) == 0U) {
+            RP2_TEST_LOG("[RP2][VISION] read latest failed after wakeup\r\n");
+            return 0U;
+        }
+        RP2_TEST_LOG("[RP2][VISION] fresh left=%u right=%u timestamp=%lums\r\n",
+                     entry->left,
+                     entry->right,
+                     (unsigned long)entry->timestamp_ms);
+        return 1U;
     }
-    return VisionRing_ReadLatest(entry);
+    if (VisionRing_ReadLatest(entry) == 0U) {
+        RP2_TEST_LOG("[RP2][VISION] no buffered frame\r\n");
+        return 0U;
+    }
+    RP2_TEST_LOG("[RP2][VISION] buffered left=%u right=%u timestamp=%lums\r\n",
+                 entry->left,
+                 entry->right,
+                 (unsigned long)entry->timestamp_ms);
+    return 1U;
 }
 
 static uint8_t shibie_rp2(void)
 {
-    VisionRingEntry center;
+    //VisionRingEntry center;  /* 已废弃：不再读中心帧 */
     VisionRingEntry outer;
 
+    RP2_TEST_LOG("[RP2][SCAN] begin settle=%ums\r\n",
+                 (unsigned int)MED_CAR_RP2_SCAN_SETTLE_MS);
     clear_recognition_buffers();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
+    VisionRing_StableRelease();
+    RP2_TEST_LOG("[RP2][SCAN] center stable cache released; scan outer views\r\n");
+
+    /* 已废弃：StableRead 方式读取中心帧
     if (VisionRing_StableRead(&center) == 0U) {
         VisionRing_StableRelease();
         return 0U;
@@ -261,40 +350,38 @@ static uint8_t shibie_rp2(void)
     VisionRing_StableRelease();
     rp2_add_unique(center.left, FORK_LEFT);
     rp2_add_unique(center.right, FORK_RIGHT);
-    /* rp2_read_fresh_entry 方式读取中心帧（已废弃）
-    if (rp2_read_fresh_entry(&center, 0U) == 0U) {
-        return 0U;
-    }
-    rp2_add_unique(center.left, FORK_LEFT);
-    rp2_add_unique(center.right, FORK_RIGHT);
-    VisionRing_StableRelease();
     */
 
-    /* Left turn -> scan -> reverse back to center */
-    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
-                    MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
-                    MED_CAR_RP2_WIGGLE_TICKS);
+    /* Left wiggle -> scan both pixels -> reverse back to center */
+    rp2_wiggle_with_log("LEFT_SCAN",
+                        MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
     if (rp2_read_fresh_entry(&outer, 1U) != 0U) {
         rp2_add_unique(outer.left, FORK_LEFT);
+        rp2_add_unique(outer.right, FORK_LEFT);
     }
-    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
-                    MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
-                    MED_CAR_RP2_WIGGLE_TICKS);
+    rp2_wiggle_with_log("LEFT_RETURN",
+                        MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT);
 
-    /* Right turn -> scan -> reverse back to center */
-    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
-                    MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
-                    MED_CAR_RP2_WIGGLE_TICKS);
+    /* Right wiggle -> scan both pixels -> reverse back to center */
+    rp2_wiggle_with_log("RIGHT_SCAN",
+                        MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
     if (rp2_read_fresh_entry(&outer, 1U) != 0U) {
+        rp2_add_unique(outer.left, FORK_RIGHT);
         rp2_add_unique(outer.right, FORK_RIGHT);
     }
-    wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
-                    MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
-                    MED_CAR_RP2_WIGGLE_TICKS);
+    rp2_wiggle_with_log("RIGHT_RETURN",
+                        MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
+                        MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT);
 
     rp2_result.valid = (rp2_result.count > 0U) ? 1U : 0U;
+    RP2_TEST_LOG("[RP2][SCAN] complete valid=%u count=%u\r\n",
+                 rp2_result.valid,
+                 rp2_result.count);
     return rp2_result.valid;
 }
 
@@ -337,17 +424,29 @@ static uint8_t rp2_scan_before_fork(uint16_t max_distance, int pwm)
     rp2_clear_result();
     clear_recognition_buffers();
     VisionRing_StableArm();
+    RP2_TEST_LOG("[RP2][APPROACH] trace start max=%u pwm=%d; stop on first digit\r\n",
+                 max_distance,
+                 pwm);
     reason = xunxian_until_fork_or_condition(
         max_distance, pwm, VisionRing_AnyDigitSeen);
+    RP2_TEST_LOG("[RP2][APPROACH] stopped reason=%s enc=(%d,%d)\r\n",
+                 (reason == MED_CAR_TRACE_STOP_CONDITION) ? "DIGIT" :
+                 ((reason == MED_CAR_TRACE_STOP_FORK) ? "FORK" : "LIMIT"),
+                 Encoder_Left,
+                 Encoder_Right);
 
     if (reason != MED_CAR_TRACE_STOP_CONDITION) {
         VisionRing_StableRelease();
+        RP2_TEST_LOG("[RP2][APPROACH] FAIL: no digit-triggered stop\r\n");
         return 0U;
     }
     scan_ok = shibie_rp2();
     if (scan_ok == 0U) {
         rp2_clear_result();
     }
+    RP2_TEST_LOG("[RP2][ADVANCE] forward %ums pwm=%d\r\n",
+                 (unsigned int)MED_CAR_RP2_FORK_ADVANCE_MS,
+                 pwm);
     move_forward_timed(MED_CAR_RP2_FORK_ADVANCE_MS, pwm);
     if (scan_ok == 0U) {
         clear_recognition_buffers();
@@ -356,6 +455,8 @@ static uint8_t rp2_scan_before_fork(uint16_t max_distance, int pwm)
     }
 
     rp2_populate_recognition_buffers();
+    RP2_TEST_LOG("[RP2][BUFFER] aim=%d Num=[%d,%d] X=[%d,%d]\r\n",
+                 aim, NumBuff[0], NumBuff[1], XBuff[0], XBuff[1]);
     return 1U;
 }
 
@@ -603,7 +704,7 @@ uint8_t MedicineCar_RunRoute12Test(uint8_t target_room)
     u2_printf("\r\n=== ROUTE12 TEST START target=%u ===\r\n", target_room);
     ok = route_run(route12_segments,
                    MED_CAR_DISTANCE_FIRST_CHECK,
-                   MED_CAR_TEST_GRAY_TRACE_PWM);
+                   MED_CAR_TRACE_PWM);
 
     route_running = 0U;
     if (ok == 0U) {
@@ -633,7 +734,7 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
     u2_printf("\r\n=== ROUTE3_8 TEST START target=%u ===\r\n", target_room);
     ok = route_run(route38_segments,
                    MED_CAR_DISTANCE_FIRST_CHECK,
-                   MED_CAR_TEST_GRAY_TRACE_PWM);
+                   MED_CAR_TRACE_PWM);
 
     route_running = 0U;
     if (ok == 0U) {
@@ -646,11 +747,66 @@ uint8_t MedicineCar_RunRoute3To8Test(uint8_t target_room)
     return ok;
 }
 
+uint8_t MedicineCar_RunRp2Test(uint8_t target_room)
+{
+    uint8_t scan_ok;
+    uint8_t matched = 0U;
+    uint8_t success;
+
+    if ((target_room < 3U) || (target_room > 8U)) {
+        u2_printf("RP2 TEST invalid target=%u\r\n", target_room);
+        Load(0, 0);
+        return 0U;
+    }
+
+    aim = (int)target_room;
+    Run_Flag = 0;
+    route_running = 1U;
+    rp2_test_logging = 1U;
+    rp2_test_turn_ok = 0U;
+    Return_Init();
+    VisionRing_Flush();
+
+    u2_printf("\r\n=== RP2 PROCESS TEST START target=%u ===\r\n",
+              target_room);
+    u2_printf("Production params: distance=%u pwm=%d advance=%ums\r\n",
+              (unsigned int)MED_CAR_DISTANCE_R3_8_SHORT,
+              MED_CAR_TRACE_PWM,
+              (unsigned int)MED_CAR_RP2_FORK_ADVANCE_MS);
+
+    scan_ok = rp2_scan_before_fork(MED_CAR_DISTANCE_R3_8_SHORT,
+                                   MED_CAR_TRACE_PWM);
+    if (scan_ok != 0U) {
+        matched = check_match_and_turn();
+    } else {
+        RP2_TEST_LOG("[RP2][RESULT] scan failed; turn skipped\r\n");
+    }
+
+    if (matched == 0U) {
+        rp2_clear_result();
+        clear_recognition_buffers();
+        VisionRing_StableRelease();
+        Load(0, 0);
+    }
+
+    success = ((matched != 0U) && (rp2_test_turn_ok != 0U)) ? 1U : 0U;
+    RP2_TEST_LOG("[RP2][RESULT] %s target=%u matched=%u turn_ok=%u\r\n",
+                 (success != 0U) ? "PASS" : "FAILED",
+                 target_room,
+                 matched,
+                 rp2_test_turn_ok);
+    rp2_test_logging = 0U;
+    route_running = 0U;
+    return success;
+}
+
 void MedicineCar_Init(void)
 {
     MedicineCarPlatform_Init();
     VisionRing_Init();
     route_running = 0U;
+    rp2_test_logging = 0U;
+    rp2_test_turn_ok = 0U;
     Run_Flag = 0;
     aim = 0;
     Number = 0;

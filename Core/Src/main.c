@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "medicine_car_app.h"
 #include "medicine_car_config.h"
+#include "medicine_car_test_config.h"
 #include "medicine_car_tests.h"
 
 /* USER CODE END Includes */

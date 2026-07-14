@@ -4,6 +4,7 @@
 
 #include "medicine_car_app.h"
 #include "medicine_car_config.h"
+#include "medicine_car_test_config.h"
 #include "medicine_car_platform.h"
 #include "medicine_car_return.h"
 #include "medicine_car_vision.h"
@@ -290,6 +291,83 @@ static void debug_route3_8_test_loop(void)
         u2_printf("ROUTE3_8 idle success=%u target=%u\r\n",
                   success,
                   cached_target);
+        delay_ms(MED_CAR_TEST_R3_8_IDLE_PRINT_MS);
+    }
+}
+
+static void debug_rp2_test_loop(void)
+{
+    uint8_t target = 0U;
+    uint8_t success;
+    uint32_t wait_ms = 0U;
+
+    Load(0, 0);
+    MedicineCar_SetRedLed(0U);
+    MedicineCar_SetGreenLed(0U);
+    MedicineCar_SetRecognizedNumber(0U);
+
+    u2_printf("\r\n=== RP2 PROCESS TEST ===\r\n");
+    u2_printf("Phase 1: show target card 3..8 to cache aim\r\n");
+    while (target == 0U) {
+        MedicineCarVisionResult result;
+
+        if (MedicineCarVision_Request(&result,
+                                      MED_CAR_VISION_UART_TIMEOUT_MS) != 0U) {
+            print_vision_digits(&result);
+            target = find_route3_8_target(&result);
+            if (target != 0U) {
+                u2_printf("[RP2 TEST] target cached=%u\r\n", target);
+            }
+        } else {
+            u2_printf("[RP2 TEST] target vision error: %s raw='%s'\r\n",
+                      MedicineCarVision_LastStatusText(),
+                      MedicineCarVision_LastLine());
+        }
+
+        if (target == 0U) {
+            MedicineCarPlatform_Service();
+            delay_ms(MED_CAR_TEST_R3_8_VISION_INTERVAL_MS);
+        }
+    }
+
+    u2_printf("Phase 2: remove drug first; this arms a fresh start trigger\r\n");
+    while (MedicineCar_ReadDrugPresent() != 0U) {
+        MedicineCarPlatform_Service();
+        delay_ms(MED_CAR_TEST_R3_8_DRUG_POLL_MS);
+        wait_ms += MED_CAR_TEST_R3_8_DRUG_POLL_MS;
+        if (wait_ms >= MED_CAR_TEST_R3_8_IDLE_PRINT_MS) {
+            wait_ms = 0U;
+            u2_printf("[RP2 TEST] waiting for drug ABSENT\r\n");
+        }
+    }
+
+    wait_ms = 0U;
+    u2_printf("Phase 3: place car on the line before RP2, then load drug to start\r\n");
+    while (MedicineCar_ReadDrugPresent() == 0U) {
+        MedicineCarPlatform_Service();
+        delay_ms(MED_CAR_TEST_R3_8_DRUG_POLL_MS);
+        wait_ms += MED_CAR_TEST_R3_8_DRUG_POLL_MS;
+        if (wait_ms >= MED_CAR_TEST_R3_8_IDLE_PRINT_MS) {
+            wait_ms = 0U;
+            u2_printf("[RP2 TEST] armed target=%u, waiting for drug PRESENT\r\n",
+                      target);
+        }
+    }
+
+    u2_printf("Phase 4: start production RP2 flow target=%u\r\n", target);
+    success = MedicineCar_RunRp2Test(target);
+    Load(0, 0);
+    if (success != 0U) {
+        MedicineCar_SetGreenLed(1U);
+    } else {
+        MedicineCar_SetRedLed(1U);
+    }
+
+    u2_printf("=== RP2 PROCESS TEST %s target=%u ===\r\n",
+              (success != 0U) ? "PASS" : "FAIL",
+              target);
+    while (1) {
+        MedicineCarPlatform_Service();
         delay_ms(MED_CAR_TEST_R3_8_IDLE_PRINT_MS);
     }
 }
@@ -715,6 +793,8 @@ void MedicineCar_RunFirmwareTestLoop(void)
     debug_route3_8_test_loop();
 #elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_WIGGLE_CALIB
     debug_wiggle_calibration_test_loop();
+#elif MED_CAR_TEST_MODE == MED_CAR_TEST_MODE_RP2
+    debug_rp2_test_loop();
 #else
     return;
 #endif
