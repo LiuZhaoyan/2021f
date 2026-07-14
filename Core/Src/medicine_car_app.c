@@ -232,39 +232,26 @@ static void rp2_add_unique(uint8_t num, uint8_t side)
     }
 }
 
-static uint8_t rp2_collect_stable_view(uint8_t left_side,
-                                       uint8_t right_side)
+static uint8_t rp2_read_fresh_entry(VisionRingEntry *entry)
 {
-    VisionRingEntry entry;
-
-    VisionRing_StableArm();
-    if (VisionRing_StableWait(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
-        VisionRing_StableRelease();
+    if (entry == NULL) {
         return 0U;
     }
-    if (VisionRing_StableRead(&entry) == 0U) {
-        VisionRing_StableRelease();
+    VisionRing_Flush();
+    if (VisionRing_WaitForNewEntry(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
         return 0U;
     }
-
-    rp2_add_unique(entry.left, left_side);
-    rp2_add_unique(entry.right, right_side);
-    VisionRing_StableRelease();
-    return 1U;
+    return VisionRing_ReadLatest(entry);
 }
 
 static uint8_t shibie_rp2(void)
 {
     VisionRingEntry center;
+    VisionRingEntry outer;
 
     clear_recognition_buffers();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    VisionRing_StableArmCompletePair();
-    if (VisionRing_StableWait(MED_CAR_RP2_SCAN_TIMEOUT_MS) == 0U) {
-        VisionRing_StableRelease();
-        return 0U;
-    }
-    if (VisionRing_StableRead(&center) == 0U) {
+    if (VisionRing_CompletePairRead(&center) == 0U) {
         VisionRing_StableRelease();
         return 0U;
     }
@@ -276,13 +263,17 @@ static uint8_t shibie_rp2(void)
                     MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
                     MED_CAR_RP2_WIGGLE_TICKS);
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    (void)rp2_collect_stable_view(FORK_LEFT, FORK_LEFT);
+    if (rp2_read_fresh_entry(&outer) != 0U) {
+        rp2_add_unique(outer.left, FORK_LEFT);
+    }
 
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_RIGHT_PWM_LEFT,
                     MED_CAR_RP2_WIGGLE_RIGHT_PWM_RIGHT,
                     (uint16_t)(MED_CAR_RP2_WIGGLE_TICKS * 2U));
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
-    (void)rp2_collect_stable_view(FORK_RIGHT, FORK_RIGHT);
+    if (rp2_read_fresh_entry(&outer) != 0U) {
+        rp2_add_unique(outer.right, FORK_RIGHT);
+    }
 
     wiggle_by_ticks(MED_CAR_RP2_WIGGLE_LEFT_PWM_LEFT,
                     MED_CAR_RP2_WIGGLE_LEFT_PWM_RIGHT,
