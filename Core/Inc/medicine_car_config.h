@@ -100,7 +100,7 @@
 #define MED_CAR_RP2_WIGGLE_TIMEOUT_MS        5000U
 #define MED_CAR_RP2_SCAN_TIMEOUT_MS          3000U
 #define MED_CAR_RP2_SCAN_SETTLE_MS           200U
-#define MED_CAR_RP2_TO_FORK_MAX_DISTANCE    200U
+#define MED_CAR_RP2_POST_SCAN_TRACE_MS       900U
 #define MED_CAR_RP2_MAX_COLLECTED            4U
 
 typedef enum {

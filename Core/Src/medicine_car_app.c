@@ -261,12 +261,19 @@ static uint8_t rp2_wait_view(const char *stage,
     return 1U;
 }
 
-static uint8_t shibie_rp2(void)
+static uint8_t shibie_rp2(const MedicineCarVisionFrame *center)
 {
     MedicineCarVisionFrame outer;
 
     APP_LOG("RP2_SCAN", "begin settle=%lums",
             (unsigned long)MED_CAR_RP2_SCAN_SETTLE_MS);
+    if (center != NULL) {
+        APP_LOG("CENTER_VISION", "left=%u right=%u timestamp=%lums",
+                center->left, center->right,
+                (unsigned long)center->timestamp_ms);
+        rp2_add_unique(center->left, FORK_LEFT);
+        rp2_add_unique(center->right, FORK_RIGHT);
+    }
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
 
     rp2_wiggle_with_log("LEFT_SCAN",
@@ -333,13 +340,13 @@ static void rp2_populate_recognition_buffers(void)
 }
 
 static uint8_t rp2_scan_before_fork(uint16_t approach_distance,
-                                    uint16_t to_fork_distance,
+                                    uint32_t post_scan_trace_ms,
                                     int pwm)
 {
     MedicineCarTraceStopReason reason;
     MedicineCarVisionFrame trigger;
+    uint8_t trigger_valid = 0U;
     uint8_t scan_ok = 0U;
-    uint8_t fork_found;
 
     rp2_clear_result();
     clear_recognition_buffers();
@@ -355,14 +362,15 @@ static uint8_t rp2_scan_before_fork(uint16_t approach_distance,
             Encoder_Left, Encoder_Right);
 
     if (reason == MED_CAR_TRACE_STOP_CONDITION) {
-        if (VisionCache_Read(&trigger) != 0U) {
+        trigger_valid = VisionCache_Read(&trigger);
+        if (trigger_valid != 0U) {
             beep_captured_vision_once();
             APP_LOG("TRIGGER", "left=%u right=%u timestamp=%lums",
                     trigger.left, trigger.right,
                     (unsigned long)trigger.timestamp_ms);
         }
         VisionCache_EndWindow();
-        scan_ok = shibie_rp2();
+        scan_ok = shibie_rp2((trigger_valid != 0U) ? &trigger : NULL);
     } else {
         VisionCache_EndWindow();
         if (reason == MED_CAR_TRACE_STOP_LIMIT) {
@@ -372,22 +380,12 @@ static uint8_t rp2_scan_before_fork(uint16_t approach_distance,
         APP_LOG("NO_TRIGGER", "fork reached before a valid vision frame");
     }
 
-    if (reason == MED_CAR_TRACE_STOP_FORK) {
-        fork_found = 1U;
-    } else {
-        APP_LOG("TO_FORK", "trace start max=%u pwm=%d",
-                to_fork_distance, pwm);
-        fork_found = xunxian_until_fork(to_fork_distance, pwm);
-        APP_LOG("TO_FORK", "%s enc=(%d,%d)",
-                (fork_found != 0U) ? "FORK" : "LIMIT",
+    if (reason == MED_CAR_TRACE_STOP_CONDITION) {
+        APP_LOG("POST_SCAN_TRACE", "start duration=%lums pwm=%d",
+                (unsigned long)post_scan_trace_ms, pwm);
+        xunxian_timed_ignore_fork(post_scan_trace_ms, pwm);
+        APP_LOG("POST_SCAN_TRACE", "complete enc=(%d,%d)",
                 Encoder_Left, Encoder_Right);
-    }
-
-    if (fork_found == 0U) {
-        clear_recognition_buffers();
-        rp2_clear_result();
-        APP_LOG("MOTION_FAIL", "fork was not detected after RP2 scan");
-        return 0U;
     }
 
     if (scan_ok != 0U) {
@@ -518,7 +516,7 @@ static uint8_t route_run(const RouteSegment *segments,
         case SEG_RP2:
             motion_ok = rp2_scan_before_fork(
                 seg->distance,
-                MED_CAR_RP2_TO_FORK_MAX_DISTANCE,
+                MED_CAR_RP2_POST_SCAN_TRACE_MS,
                 pwm);
             if (motion_ok == 0U) {
                 return 0U;
@@ -634,15 +632,15 @@ uint8_t MedicineCar_RunRp2Test(uint8_t target_room)
     aim = (int)target_room;
     Return_Init();
     VisionCache_EndWindow();
-    APP_LOG("START", "target=%u approach=%u to_fork=%u pwm=%d",
+    APP_LOG("START", "target=%u approach=%u post_scan=%lums pwm=%d",
             target_room,
             (unsigned int)MED_CAR_DISTANCE_R3_8_SHORT,
-            (unsigned int)MED_CAR_RP2_TO_FORK_MAX_DISTANCE,
+            (unsigned long)MED_CAR_RP2_POST_SCAN_TRACE_MS,
             MED_CAR_TRACE_PWM);
 
     motion_ok = rp2_scan_before_fork(
         MED_CAR_DISTANCE_R3_8_SHORT,
-        MED_CAR_RP2_TO_FORK_MAX_DISTANCE,
+        MED_CAR_RP2_POST_SCAN_TRACE_MS,
         MED_CAR_TRACE_PWM);
     if (motion_ok != 0U) {
         match_result = check_match_and_turn();
