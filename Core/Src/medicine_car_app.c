@@ -258,9 +258,6 @@ static uint8_t shibie_rp2(void)
 
     APP_LOG("RP2_SCAN", "begin settle=%lums",
             (unsigned long)MED_CAR_RP2_SCAN_SETTLE_MS);
-    clear_recognition_buffers();
-    rp2_clear_result();
-    VisionCache_EndWindow();
     delay_ms(MED_CAR_RP2_SCAN_SETTLE_MS);
 
     rp2_wiggle_with_log("LEFT_SCAN",
@@ -297,7 +294,6 @@ static void rp2_populate_recognition_buffers(void)
 {
     uint8_t i;
 
-    clear_recognition_buffers();
     for (i = 0U; i < rp2_result.count; i++) {
         if (rp2_result.nums[i] == aim) {
             if (rp2_result.sides[i] == FORK_LEFT) {
@@ -428,8 +424,6 @@ static uint8_t route_run(const RouteSegment *segments,
 
     Return_Init();
     VisionCache_EndWindow();
-    clear_recognition_buffers();
-    rp2_clear_result();
 
     for (i = 0U; segments[i].type != SEG_END; i++) {
         const RouteSegment *seg = &segments[i];
@@ -437,8 +431,6 @@ static uint8_t route_run(const RouteSegment *segments,
         uint8_t motion_ok;
 
         VisionCache_EndWindow();
-        clear_recognition_buffers();
-        rp2_clear_result();
         APP_LOG("SEG_BEGIN", "index=%u type=%s distance=%u cache=cleared",
                 i, segment_name(seg->type), seg->distance);
 
@@ -475,6 +467,7 @@ static uint8_t route_run(const RouteSegment *segments,
             MedicineCarVisionFrame frame;
             uint8_t frame_valid;
 
+            clear_recognition_buffers();
             VisionCache_BeginWindow();
             APP_LOG("FORK", "vision window opened; tracing without vision stop");
             motion_ok = xunxian(seg->distance, pwm);

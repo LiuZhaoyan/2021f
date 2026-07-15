@@ -736,9 +736,10 @@ static uint8_t fork_detected(const uint8_t gray[8])
     return (left || right) ? 1U : 0U;
 }
 
-MedicineCarTraceStopReason xunxian_until_fork_or_condition(
+static MedicineCarTraceStopReason xunxian_until_fork_or_condition_impl(
     uint16_t max_distance, int pwm,
-    MedicineCarTraceConditionFn condition_fn)
+    MedicineCarTraceConditionFn condition_fn,
+    uint8_t keep_moving_on_fork)
 {
     static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
     uint32_t guard = 0U;
@@ -786,7 +787,9 @@ MedicineCarTraceStopReason xunxian_until_fork_or_condition(
         }
 
         if (fork_detected(gray) != 0U) {
-            stop(1);
+            if (keep_moving_on_fork == 0U) {
+                stop(1);
+            }
             return MED_CAR_TRACE_STOP_FORK;
         }
 
@@ -838,9 +841,23 @@ MedicineCarTraceStopReason xunxian_until_fork_or_condition(
     return MED_CAR_TRACE_STOP_LIMIT;
 }
 
+MedicineCarTraceStopReason xunxian_until_fork_or_condition(
+    uint16_t max_distance, int pwm,
+    MedicineCarTraceConditionFn condition_fn)
+{
+    return xunxian_until_fork_or_condition_impl(max_distance, pwm,
+                                                 condition_fn, 0U);
+}
+
 uint8_t xunxian_until_fork(uint16_t max_distance, int pwm)
 {
     return (xunxian_until_fork_or_condition(max_distance, pwm, NULL) ==
+            MED_CAR_TRACE_STOP_FORK) ? 1U : 0U;
+}
+
+uint8_t xunxian_until_fork_keep_moving(uint16_t max_distance, int pwm)
+{
+    return (xunxian_until_fork_or_condition_impl(max_distance, pwm, NULL, 1U) ==
             MED_CAR_TRACE_STOP_FORK) ? 1U : 0U;
 }
 
@@ -851,6 +868,14 @@ void move_forward_timed(uint32_t duration_ms, int pwm)
          trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
     HAL_Delay(duration_ms);
     stop(1);
+}
+
+void move_forward_timed_keep_moving(uint32_t duration_ms, int pwm)
+{
+    MedicineCar_ResetEncoders();
+    Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
+         trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
+    HAL_Delay(duration_ms);
 }
 
 void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks)

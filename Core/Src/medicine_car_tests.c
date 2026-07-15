@@ -293,18 +293,6 @@ static void debug_rp2_test_loop(void)
     TEST_LOG("START", "RP2 PROCESS TEST");
     target = wait_for_test_target(3U, 8U);
 
-    TEST_LOG("WAIT_DRUG_ABSENT", "target=%u remove drug before arming", target);
-    while (MedicineCar_ReadDrugPresent() != 0U) {
-        MedicineCarPlatform_Service();
-        delay_ms(MED_CAR_TEST_R3_8_DRUG_POLL_MS);
-        wait_ms += MED_CAR_TEST_R3_8_DRUG_POLL_MS;
-        if (wait_ms >= MED_CAR_TEST_R3_8_IDLE_PRINT_MS) {
-            wait_ms = 0U;
-            TEST_LOG("WAIT_DRUG_ABSENT", "target=%u", target);
-        }
-    }
-
-    wait_ms = 0U;
     TEST_LOG("WAIT_DRUG_PRESENT",
              "place car before RP2, then load drug; target=%u", target);
     while (MedicineCar_ReadDrugPresent() == 0U) {
@@ -318,6 +306,7 @@ static void debug_rp2_test_loop(void)
     }
 
     TEST_LOG("ROUTE_START", "target=%u", target);
+    delay_ms(1000U);
     success = MedicineCar_RunRp2Test(target);
     Load(0, 0);
     if (success != 0U) {

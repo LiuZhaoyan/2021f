@@ -22,7 +22,7 @@
 #define MED_CAR_TEST_MODE_WIGGLE_CALIB    15U
 #define MED_CAR_TEST_MODE_RP2             16U
 #ifndef MED_CAR_TEST_MODE
-#define MED_CAR_TEST_MODE                 MED_CAR_TEST_MODE_RP2
+#define MED_CAR_TEST_MODE                 MED_CAR_TEST_MODE_ROUTE3_8
 #endif
 
 /* Motor, gray sensor, LED and encoder tests. */
