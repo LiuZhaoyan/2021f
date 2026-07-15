@@ -15,6 +15,8 @@
 #define MED_CAR_ENABLE_KEYS             0U
 #define MED_CAR_ENABLE_DRUG_SENSOR      1U
 
+#define MED_CAR_VISION_FRAME_BEEP_MS          100U
+#define MED_CAR_VISION_BEEP_GAP_MS            100U
 #define MED_CAR_MATCH_BEEP_MS                 100U
 #define MED_CAR_FORK_STOP_SETTLE_MS         300U
 
@@ -78,7 +80,7 @@
 #define MED_CAR_DOOR_GUARD_MAX          800U
 #define MED_CAR_DOOR_MISS_MAX           5U
 
-#define MED_CAR_CROSS_ADVANCE_MS         1500U
+#define MED_CAR_CROSS_ADVANCE_MS         200U
 #define MED_CAR_CROSS_ADVANCE_PWM       MED_CAR_TRACE_PWM
 
 #define MED_CAR_RETURN_STACK_SIZE         10U

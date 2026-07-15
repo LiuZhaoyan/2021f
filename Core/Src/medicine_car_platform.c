@@ -33,7 +33,6 @@ static uint8_t gray_sensor_values[8] = {
 static uint16_t last_left_encoder_count;
 static uint16_t last_right_encoder_count;
 
-void move_forward_timed(uint32_t duration_ms, int pwm);
 static int abs_int_local(int value);
 
 static uint8_t read_pin(GPIO_TypeDef *port, uint16_t pin)
@@ -564,8 +563,8 @@ uint8_t search_line_rotating(int left_pwm, int right_pwm,
 
 uint8_t sensor_turn_left(void)
 {
-    // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-    //                    MED_CAR_CROSS_ADVANCE_PWM);
+    // xunxian_timed_ignore_fork(MED_CAR_CROSS_ADVANCE_MS,
+    //                           MED_CAR_CROSS_ADVANCE_PWM);
     return search_line_rotating_with_min_ticks(MED_CAR_TURN_LEFT_LEFT_PWM,
                                                MED_CAR_TURN_LEFT_RIGHT_PWM,
                                                MED_CAR_SENSOR_TURN_LEFT_MIN_TICKS,
@@ -576,8 +575,8 @@ uint8_t sensor_turn_left(void)
 
 uint8_t sensor_turn_right(void)
 {
-    // move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-    //                    MED_CAR_CROSS_ADVANCE_PWM);
+    // xunxian_timed_ignore_fork(MED_CAR_CROSS_ADVANCE_MS,
+    //                           MED_CAR_CROSS_ADVANCE_PWM);
     return search_line_rotating_with_min_ticks(MED_CAR_TURN_RIGHT_LEFT_PWM,
                                                MED_CAR_TURN_RIGHT_RIGHT_PWM,
                                                MED_CAR_SENSOR_TURN_RIGHT_MIN_TICKS,
@@ -861,21 +860,86 @@ uint8_t xunxian_until_fork_keep_moving(uint16_t max_distance, int pwm)
             MED_CAR_TRACE_STOP_FORK) ? 1U : 0U;
 }
 
-void move_forward_timed(uint32_t duration_ms, int pwm)
+static void xunxian_timed_ignore_fork_impl(uint32_t duration_ms, int pwm,
+                                           uint8_t stop_at_end)
 {
+    static const int8_t line_weights[8] = {3, 2, 1, 0, 0, -1, -2, -3};
+    uint32_t start_ms;
+    int last_direction = 0;
+
     MedicineCar_ResetEncoders();
-    Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
-         trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
-    HAL_Delay(duration_ms);
-    stop(1);
+
+    {
+        uint8_t warmup_gray[8];
+        uint8_t channel;
+        int warmup_sum = 0;
+
+        MedicineCar_ReadLineSensors(warmup_gray);
+        for (channel = 0U; channel < 8U; channel++) {
+            if (warmup_gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                warmup_sum += line_weights[channel];
+            }
+        }
+        if (warmup_sum > 0) {
+            last_direction = 1;
+        } else if (warmup_sum < 0) {
+            last_direction = -1;
+        }
+    }
+
+    start_ms = HAL_GetTick();
+    while ((HAL_GetTick() - start_ms) < duration_ms) {
+        uint8_t gray[8];
+        uint8_t line_seen = 0U;
+        uint8_t black_count = 0U;
+        uint8_t channel;
+        int weighted_sum = 0;
+        int correction = 0;
+
+        MedicineCar_ReadLineSensors(gray);
+        for (channel = 0U; channel < 8U; channel++) {
+            if (gray[channel] == MED_CAR_GRAY_BLACK_LEVEL) {
+                line_seen = 1U;
+                weighted_sum += line_weights[channel];
+                black_count++;
+            }
+        }
+
+        if (line_seen != 0U) {
+            correction = (weighted_sum * MED_CAR_LINE_PWM_ADJUST_1) /
+                         (int)black_count;
+            if (correction > 0) {
+                last_direction = 1;
+            } else if (correction < 0) {
+                last_direction = -1;
+            } else {
+                last_direction = 0;
+            }
+        } else if (last_direction > 0) {
+            correction = MED_CAR_LINE_PWM_ADJUST_3;
+        } else if (last_direction < 0) {
+            correction = -MED_CAR_LINE_PWM_ADJUST_3;
+        }
+
+        Load(trim_run_pwm(pwm - correction, MED_CAR_LEFT_PWM_TRIM_NUM),
+             trim_run_pwm(pwm + correction, MED_CAR_RIGHT_PWM_TRIM_NUM));
+        HAL_Delay(MED_CAR_TURN_POLL_MS);
+        Read_Speed();
+    }
+
+    if (stop_at_end != 0U) {
+        stop(1);
+    }
 }
 
-void move_forward_timed_keep_moving(uint32_t duration_ms, int pwm)
+void xunxian_timed_ignore_fork(uint32_t duration_ms, int pwm)
 {
-    MedicineCar_ResetEncoders();
-    Load(trim_run_pwm(pwm, MED_CAR_LEFT_PWM_TRIM_NUM),
-         trim_run_pwm(pwm, MED_CAR_RIGHT_PWM_TRIM_NUM));
-    HAL_Delay(duration_ms);
+    xunxian_timed_ignore_fork_impl(duration_ms, pwm, 1U);
+}
+
+void xunxian_timed_ignore_fork_keep_moving(uint32_t duration_ms, int pwm)
+{
+    xunxian_timed_ignore_fork_impl(duration_ms, pwm, 0U);
 }
 
 void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks)

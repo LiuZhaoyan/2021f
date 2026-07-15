@@ -221,6 +221,10 @@ static void print_vision_frame(const MedicineCarVisionFrame *frame)
         return;
     }
 
+    MedicineCar_SetYellowLed(1U);
+    delay_ms(MED_CAR_VISION_FRAME_BEEP_MS);
+    MedicineCar_SetYellowLed(0U);
+    delay_ms(MED_CAR_VISION_BEEP_GAP_MS);
     TEST_LOG("VISION_FRAME", "left=%u right=%u timestamp=%lums",
              frame->left, frame->right,
              (unsigned long)frame->timestamp_ms);

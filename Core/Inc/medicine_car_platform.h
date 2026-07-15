@@ -63,8 +63,8 @@ uint8_t xunxian_until_fork_keep_moving(uint16_t max_distance, int pwm);
 MedicineCarTraceStopReason xunxian_until_fork_or_condition(
     uint16_t max_distance, int pwm,
     MedicineCarTraceConditionFn condition_fn);
-void move_forward_timed(uint32_t duration_ms, int pwm);
-void move_forward_timed_keep_moving(uint32_t duration_ms, int pwm);
+void xunxian_timed_ignore_fork(uint32_t duration_ms, int pwm);
+void xunxian_timed_ignore_fork_keep_moving(uint32_t duration_ms, int pwm);
 void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks);
 
 void u2_printf(const char *fmt, ...);

@@ -95,6 +95,14 @@ static void beep_matched_vision_once(void)
     MedicineCar_SetYellowLed(0U);
 }
 
+static void beep_captured_vision_once(void)
+{
+    MedicineCar_SetYellowLed(1U);
+    delay_ms(MED_CAR_VISION_FRAME_BEEP_MS);
+    MedicineCar_SetYellowLed(0U);
+    delay_ms(MED_CAR_VISION_BEEP_GAP_MS);
+}
+
 static void wait_delivery_done(void)
 {
     uint32_t waited = 0U;
@@ -245,6 +253,7 @@ static uint8_t rp2_wait_view(const char *stage,
         return 0U;
     }
 
+    beep_captured_vision_once();
     APP_LOG(stage, "frame left=%u right=%u timestamp=%lums",
             frame->left, frame->right,
             (unsigned long)frame->timestamp_ms);
@@ -347,6 +356,7 @@ static uint8_t rp2_scan_before_fork(uint16_t approach_distance,
 
     if (reason == MED_CAR_TRACE_STOP_CONDITION) {
         if (VisionCache_Read(&trigger) != 0U) {
+            beep_captured_vision_once();
             APP_LOG("TRIGGER", "left=%u right=%u timestamp=%lums",
                     trigger.left, trigger.right,
                     (unsigned long)trigger.timestamp_ms);
@@ -413,7 +423,7 @@ static void route_continue_straight(int pwm)
     Return_Push(RETURN_DIR_STRAIGHT);
     APP_LOG("FALLBACK", "straight escape %lums pwm=%d",
             (unsigned long)MED_CAR_CROSS_ADVANCE_MS, pwm);
-    move_forward_timed(MED_CAR_CROSS_ADVANCE_MS, pwm);
+    xunxian_timed_ignore_fork(MED_CAR_CROSS_ADVANCE_MS, pwm);
 }
 
 static uint8_t route_run(const RouteSegment *segments,
@@ -457,8 +467,8 @@ static uint8_t route_run(const RouteSegment *segments,
                 return 0U;
             }
             if (seg->advance_if_straight != 0U) {
-                move_forward_timed(MED_CAR_CROSS_ADVANCE_MS,
-                                   MED_CAR_CROSS_ADVANCE_PWM);
+                xunxian_timed_ignore_fork(MED_CAR_CROSS_ADVANCE_MS,
+                                          MED_CAR_CROSS_ADVANCE_PWM);
             }
             Return_Push(RETURN_DIR_STRAIGHT);
             break;
@@ -478,11 +488,12 @@ static uint8_t route_run(const RouteSegment *segments,
                 return 0U;
             }
 
-            frame_valid = VisionCache_Read(&frame);
-            VisionCache_EndWindow();
             Load(0, 0);
             delay_ms(MED_CAR_FORK_STOP_SETTLE_MS);
+            frame_valid = VisionCache_Read(&frame);
+            VisionCache_EndWindow();
             if (frame_valid != 0U) {
+                beep_captured_vision_once();
                 APP_LOG("FORK_FRAME", "left=%u right=%u timestamp=%lums",
                         frame.left, frame.right,
                         (unsigned long)frame.timestamp_ms);

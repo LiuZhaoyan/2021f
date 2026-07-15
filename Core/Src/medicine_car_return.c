@@ -69,14 +69,14 @@ void Return_Execute(uint16_t home_distance, int pwm)
     uint8_t retry;
 
     sensor_diaotou();
-    move_forward_timed(MED_CAR_RETURN_ESCAPE_MS, pwm);
+    delay_ms(MED_CAR_RETURN_ESCAPE_MS);
 
     while (!Return_IsEmpty()) {
         uint8_t dir = return_pop();
         uint8_t continue_to_home =
             ((dir == RETURN_DIR_STRAIGHT) && Return_IsEmpty()) ? 1U : 0U;
 
-        move_forward_timed(MED_CAR_RETURN_FORK_CLEAR_MS, pwm);
+        xunxian_timed_ignore_fork(MED_CAR_RETURN_FORK_CLEAR_MS, pwm);
         if (continue_to_home != 0U) {
             xunxian_until_fork_keep_moving(home_distance, pwm);
         } else {
@@ -85,9 +85,10 @@ void Return_Execute(uint16_t home_distance, int pwm)
         if (dir != RETURN_DIR_STRAIGHT) {
             fork_reverse_turn(dir);
         } else if (continue_to_home != 0U) {
-            move_forward_timed_keep_moving(MED_CAR_CROSS_ADVANCE_MS, pwm);
+            xunxian_timed_ignore_fork_keep_moving(
+                MED_CAR_CROSS_ADVANCE_MS, pwm);
         } else {
-            move_forward_timed(MED_CAR_CROSS_ADVANCE_MS, pwm);
+            xunxian_timed_ignore_fork(MED_CAR_CROSS_ADVANCE_MS, pwm);
         }
     }
 
