@@ -10,14 +10,11 @@
 #include "tim.h"
 #include "usart.h"
 
-volatile int N = 0;
 volatile int Speed_L = 0;
 volatile int Speed_R = 0;
 volatile int Pwm_L = 0;
 volatile int Pwm_R = 0;
 volatile int Time_s = 0;
-volatile int Run_Flag = 0;
-volatile int Number = 0;
 volatile int aim = 0;
 volatile int BluetoohAim = 0;
 volatile int Encoder_Left = 0;
@@ -875,11 +872,6 @@ void wiggle_by_ticks(int left_pwm, int right_pwm, uint16_t target_ticks)
     }
 
     stop(1);
-}
-
-int getnum(void)
-{
-    return N;
 }
 
 void u2_printf(const char *fmt, ...)

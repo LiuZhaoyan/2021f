@@ -410,9 +410,9 @@
               <FilePath>../Core/Src/medicine_car_platform.c</FilePath>
             </File>
             <File>
-              <FileName>medicine_car_vision.c</FileName>
+              <FileName>medicine_car_vision_cache.c</FileName>
               <FileType>1</FileType>
-              <FilePath>../Core/Src/medicine_car_vision.c</FilePath>
+              <FilePath>../Core/Src/medicine_car_vision_cache.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>
@@ -453,11 +453,6 @@
               <FileName>medicine_car_return.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Core\Src\medicine_car_return.c</FilePath>
-            </File>
-            <File>
-              <FileName>medicine_car_vision_ring.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Core\Src\medicine_car_vision_ring.c</FilePath>
             </File>
           </Files>
         </Group>

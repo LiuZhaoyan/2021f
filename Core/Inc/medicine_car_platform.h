@@ -7,14 +7,11 @@
 extern "C" {
 #endif
 
-extern volatile int N;
 extern volatile int Speed_L;
 extern volatile int Speed_R;
 extern volatile int Pwm_L;
 extern volatile int Pwm_R;
 extern volatile int Time_s;
-extern volatile int Run_Flag;
-extern volatile int Number;
 extern volatile int aim;
 extern volatile int BluetoohAim;
 extern volatile int Encoder_Left;
@@ -54,7 +51,6 @@ void turn_right(void);
 void diaotou(void);
 uint8_t xunxian(uint16_t roadsum, int pwm);
 void zhao_bai(uint16_t roadsum, int pwm);
-int getnum(void);
 uint8_t search_line_rotating(int left_pwm, int right_pwm,
                              uint16_t min_delay_ms, uint16_t timeout_ms,
                              uint8_t (*aligned_fn)(void));
